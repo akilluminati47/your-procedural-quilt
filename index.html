@@ -1,0 +1,1277 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<title>Procedural Quilt</title>
+
+<meta name="description" content="An infinite procedural zoom">
+<meta name="theme-color" content="#05030a">
+
+<!-- rich link embed -->
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Procedural Quilt">
+<meta property="og:title" content="Procedural Quilt">
+<meta property="og:description" content="An infinite procedural zoom">
+<meta property="og:url" content="https://procedural-quilt.pages.dev/">
+<meta property="og:image" content="https://procedural-quilt.pages.dev/og-banner-v2.jpg">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="Nested procedural portals zooming inward">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="Procedural Quilt">
+<meta name="twitter:description" content="An infinite procedural zoom">
+<meta name="twitter:image" content="https://procedural-quilt.pages.dev/og-banner-v2.jpg">
+
+<!-- favicon set (eye) -->
+<link rel="icon" href="favicon.svg" type="image/svg+xml">
+<link rel="icon" href="favicon.ico" sizes="any">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<link rel="manifest" href="site.webmanifest">
+<style>
+  html, body { margin: 0; height: 100%; background: #05030a; overflow: hidden; cursor: none;
+    touch-action: none; -webkit-user-select: none; user-select: none;
+    -webkit-tap-highlight-color: transparent; overscroll-behavior: none; }
+  #stage { position: fixed; inset: 0; width: 100%; height: 100%; display: block; }
+
+  #cursor {
+    position: fixed; left: -100px; top: -100px; width: 96px; height: 96px;
+    pointer-events: none; z-index: 30;
+    transform: translate(-50%, -50%);
+    opacity: 0; transition: opacity .6s ease;
+    will-change: left, top;
+  }
+
+  #enter {
+    position: fixed; inset: 0; z-index: 10;
+    display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 18px;
+    background: radial-gradient(ellipse at center, #14092b 0%, #05030a 70%);
+    color: #e8dcff; font-family: Georgia, 'Times New Roman', serif;
+    cursor: none; user-select: none; transition: opacity 1.2s ease;
+    overflow: hidden;
+    --mx: 50%; --my: 50%; --r: 90px; --blur: 0px;
+  }
+  #enter.hidden { opacity: 0; pointer-events: none; }
+  #enter h1 { position: relative; z-index: 1; font-size: clamp(28px, 6vw, 64px); font-weight: normal; letter-spacing: .35em; margin: 0; text-transform: uppercase; text-align: center; padding: 0 6vw; box-sizing: border-box; text-indent: .35em; }
+
+  #enterBlur {
+    position: absolute; inset: 0; z-index: 2; pointer-events: none;
+    backdrop-filter: blur(var(--blur));
+    -webkit-backdrop-filter: blur(var(--blur));
+    -webkit-mask-image: radial-gradient(circle var(--r) at var(--mx) var(--my), transparent 0 var(--r), #000 calc(var(--r) + 70px));
+            mask-image: radial-gradient(circle var(--r) at var(--mx) var(--my), transparent 0 var(--r), #000 calc(var(--r) + 70px));
+  }
+
+  #enter .ring {
+    position: absolute; left: var(--mx); top: var(--my); z-index: 3;
+    width: 110px; height: 110px; margin: -55px 0 0 -55px; border-radius: 50%;
+    border: 1px solid rgba(232,220,255,.5); pointer-events: none;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 34px; animation: pulse 2.4s ease-in-out infinite;
+    transition: border-color .3s ease, box-shadow .3s ease;
+  }
+  #enter .ring.excited {
+    animation: pulseExcited .55s ease-in-out infinite;
+    border-color: rgba(232,220,255,.95);
+    box-shadow: 0 0 46px rgba(200,170,255,.6);
+  }
+  @keyframes pulse { 0%,100% { transform: scale(1); opacity:.7 } 50% { transform: scale(1.08); opacity: 1 } }
+  @keyframes pulseExcited { 0%,100% { transform: scale(1); opacity:.85 } 50% { transform: scale(1.3); opacity: 1 } }
+
+  #hud {
+    position: fixed; left: 14px; bottom: 12px; z-index: 5;
+    color: rgba(255,255,255,.55); font: 11px/1.7 ui-monospace, Consolas, monospace;
+    letter-spacing: .06em; pointer-events: none;
+    transition: opacity 1s ease;
+  }
+  #hud.faded { opacity: 0; }
+
+  #buttons { position: fixed; right: 12px; top: 12px; z-index: 5; display: flex; gap: 8px; opacity: .35; transition: opacity .3s; }
+  #buttons:hover { opacity: 1; }
+  #buttons button {
+    background: rgba(0,0,0,.4); color: #fff; border: 1px solid rgba(255,255,255,.25);
+    border-radius: 6px; width: 34px; height: 30px; cursor: none; font-size: 14px;
+  }
+  #buttons button.active {
+    border-color: rgba(232,220,255,.9); background: rgba(150,110,255,.35);
+    box-shadow: 0 0 10px rgba(180,140,255,.5);
+  }
+
+  /* ---- phones: keep the wide-tracked title inside a narrow portrait column,
+         shrink the lens ring, and give every control a real touch target ---- */
+  @media (max-width: 640px) {
+    #enter h1 { font-size: clamp(22px, 8.5vw, 46px); letter-spacing: .24em; text-indent: .24em; line-height: 1.35; }
+    #enter .ring { width: 84px; height: 84px; margin: -42px 0 0 -42px; font-size: 28px; }
+    #buttons { gap: 10px; opacity: .8; }
+    #buttons button { width: 44px; height: 40px; font-size: 17px; }
+    #hud { font-size: 10px; right: 14px; max-width: 62vw; line-height: 1.6; }
+  }
+  @media (max-width: 420px), (max-width: 640px) and (orientation: portrait) {
+    #enter h1 { letter-spacing: .16em; text-indent: .16em; }
+  }
+  /* coarse pointer (touch): controls stay visible without a hover to reveal them */
+  @media (hover: none) {
+    #buttons { opacity: .85; }
+  }
+</style>
+</head>
+<body>
+<canvas id="stage"></canvas>
+
+<div id="enter">
+  <div id="enterBlur"></div>
+  <h1>Procedural Quilt</h1>
+  <div class="ring"></div>
+</div>
+
+<img id="cursor" alt="" draggable="false"
+     src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAGAAAABgCAMAAADVRocKAAADAFBMVEUAAAD39/f///////////////////////////////////8JCQ3///8AAAL///////////////////8AAAT///////////////8HBwv///////////////////////////////////////////////////////////////////////////////////////////////////////////////////8DAwj///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////8AAAX////////////////////////19fX9/f3m5uZVVVX///9aWl1bW17j4+QAAATk5OU+PkE9PUCvr7EZGR0bGx8PDxQbGx52dnkaGh53d3nq6usFBQoVFRkFBQlEREe1tba2trceHiIODhJ9fX9+foDv7/AHBwsUFBgHBwzw8PFJSUwGBgpLS06+vr8AAAMYGBwiIiYNDREjIyeHhon39/cJCQ0TExcKCg75+PhSUlXGxsfIyMknJyoMDBESEhYRERUWFhoXFxsoKCyPj5EmJin9/f4hISX29vbV1dYBAQWRkZP6+fn5+fj6+vrx8fGEhIb//v5ZWVwQEBQICA3Z2dnY2Nh6enxycnRzc3VlZWd0dHbPz9AAAAK4uLmwsLHe3t4AAACmpqj19fXQ0NEuLjILCw+FhYeTk5Xp6Og2NjltbW8CAgYvLzKZmZtVVVdjY2WqqavBwcIMDBCampyXl5gDAwfo5+cPDxM8PD9nZ2piYmXKyssXFxzT09MICAxDQ0ba2ts0NDecnJ2jo6Xm5uYEBAju7u43Nztvb3GMi41UVFZFRUjt7e1NTVBISEtgYGKlpaeIiIrp6elra24gICQkJCclJSmurq8cHCAdHSHh4eKnp6jc3Nw7Oz5XV1qrq6yfn6CNjY51dXctLTBcXF9xcHNycXRxcXTr6+zLOxz+AAAAYXRSTlMAQ+fmZAv6DJmYLP7N/sxbWgb0/geRkib+x1ZUBPLwi4oiIL++Tk0B6+qCHRy4tkdF5eR7eBj+FrCvPt/ec3ASEKmmNzXY1mhmDv37oJ0xMNHQYV8K+f73CJQrKAJN6goDBawufwAAA8pJREFUeJztl2d001YUxwultEDVgdsCLd2Dlu5FW7pb9t57XYIZksMjsRkGHIOJjQmxw7ItIIAJhGBGGAHECMthY8IMM4ywVwh7B3iSbGLzgYNsCb6835F1dI6Of3/fe4/fk54jEAgEAoFAeCYUK6ZwQPHnlfWXACihpP+Fkp2jSr6oYMBLXdTqrqWU85eGbmXKdIfSigW83IOiaarHK0r5XwVGEx2tYeA1Zfyvl+2pQhhVr7JvKBLwZkyslg/Q6mLeUsJfDnqXZ/gApnxvKKdAQIU+FM37EaKpvhXk978N/fRCAbgEfT94R25/xXf7CxMWUQ14r6LMAe8PNAgTFokzDvpAXv+HMNjkb5DQJNMQ+EjWgI/jzZYiP0IWKv4TOf2fwlBrUAG4BOsw+Ew+f6XPE8zBeh5zwheVZAuoPDwx7tEAmz2pslz+L2GELqRBQpN0I+ArmQK+Hhk6Yf+czaO+kcf/LYweIxTgcDKMy2ETcbDWsfCdLAHfjxMmzGjQeLwYRfMgBlloZB73gxz+H5OtNt5vnzBxktU9GVKmJCVNmZqaMs3gsKb9FLn/Z5heBTeI8cyYCbOs1sGz0zFz5ibAvFhUJQp+iTjg1/kqFvu1GQsGLVykYT06k8lk0HGLlzjjEKta+luk/qqwLBMXQHPLYfSKlRr/gmdfBau9ODYzC6pGGPD7GoofQMZaWMetDwRY1BsmbhT+etSmPyLz/wkeB794ZsFmzrd+S7YYkLgVtvmEK4cH/orE/zds9zJ4ZbOl7VA7YgMBO92jUu3i2sF458I/EQT8O8vNIsbm3ZWSrad1gYCc3bBOLAAhl3vPf+H7/4e9dgbR6n2AuMwcbv+BjFwXg1jv/IOJge2NSTwE1cIOqL4fP0jQxsNwZOvavLyj8ceO5413IcMJOJn7cEmiqVM1wvXXBK0TG2JPQypAGj7wZ4id9U06Ywzan51aqBWev3ads27xR547n5+ff95xYWXB0IvIdByiigrAuFfXDe+Vod4ln0toM+vk0XCXt5gyLazuyoHgBww859yu9cPxN4CrM4K3GYuvb0q2ljZsg2shBSAmpzs0DCOg0fXAo6J/mmN63bCxFv3NxXqhsKA71IXG0v1NgPaEegr0fEUFHp3lkf0zWoOgqVR/s+ZzWoRqcJOEjVM8h9LiVstWEgNKnckNmeTjwa8MraX528Btzmh4YoxcFrSV4m9XPebO3cJ79/DxkPR0/0VhIX+HPxXdu3vnfo12EgLaJ3coLpEOye0lBHTsJKVekU4dpX+HQCAQCAQCgUB4ijwAJ8hRVaAsDXkAAAAASUVORK5CYII=">
+
+<div id="hud"></div>
+<div id="buttons">
+  <button id="btnMute"  title="mute (M)">&#128266;</button>
+  <button id="btnRegen" title="new world (R)">&#10227;</button>
+  <button id="btnCycle" title="seed cycle (C)">&#9654;</button>
+  <button id="btnFull"  title="fullscreen (F)">&#9974;</button>
+</div>
+
+<script>
+'use strict';
+/* ============================================================
+   PORTAL QUILT — procedurally generated infinite zoom
+   Every image layer and every sound is synthesized at runtime.
+   ============================================================ */
+
+const SCALE  = 5;      // zoom ratio between nested layers
+const TEX    = 2048;   // raster cache per layer; magnified layers repaint as vectors
+const NSCENE = 10;     // scenes in the loop
+
+const canvas = document.getElementById('stage');
+const ctx    = canvas.getContext('2d', { alpha: false });
+// world frames land here during the zipper transition, then composite to ctx
+const off    = document.createElement('canvas');
+const offCtx = off.getContext('2d', { alpha: false });
+let W = 0, H = 0, DPR = 1;
+
+// dynamic render resolution: the backing store is the device's pixels scaled
+// by renderScale, which the frame governor in draw() dials down when the GPU
+// can't hold 60fps and eases back up when it can. CSS size stays full, so the
+// canvas just samples at fewer pixels — trading sharpness for framerate to fit
+// whatever device is running it.
+const DPR_CAP   = 2;
+const RS_MIN    = 0.5;
+const RS_MAX    = 1;
+const PX_BUDGET = 2.6e6;   // comfortable starting fill-rate ceiling; the governor takes it from here
+
+// pick a starting point from the device's own pixel count (a 1440p desktop
+// and a 3x-DPR phone need very different defaults) — the governor in draw()
+// fine-tunes from here once it can see real frame times.
+function pickInitialScale() {
+  const dpr = Math.min(window.devicePixelRatio || 1, DPR_CAP);
+  const px = innerWidth * innerHeight * dpr * dpr;
+  return px > PX_BUDGET ? Math.max(RS_MIN, Math.sqrt(PX_BUDGET / px)) : 1;
+}
+let renderScale = pickInitialScale();
+
+function resize() {
+  DPR = Math.min(window.devicePixelRatio || 1, DPR_CAP) * renderScale;
+  W = canvas.width  = Math.round(innerWidth  * DPR);
+  H = canvas.height = Math.round(innerHeight * DPR);
+  canvas.style.width = innerWidth + 'px';
+  canvas.style.height = innerHeight + 'px';
+  ctx.imageSmoothingQuality = 'high';   // reset by width/height assignment
+  off.width = W; off.height = H;
+  offCtx.imageSmoothingQuality = 'high';
+}
+addEventListener('resize', resize);
+resize();
+
+/* ---------------- seeded randomness ---------------- */
+function mulberry32(a) {
+  return function () {
+    a |= 0; a = a + 0x6D2B79F5 | 0;
+    let t = Math.imul(a ^ a >>> 15, 1 | a);
+    t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t;
+    return ((t ^ t >>> 14) >>> 0) / 4294967296;
+  };
+}
+const hsl = (h, s, l, a = 1) => `hsla(${((h % 360) + 360) % 360},${s}%,${l}%,${a})`;
+
+function makePalette(R) {
+  const h = R() * 360;
+  const spread = [30, 60, 120, 180][Math.floor(R() * 4)];
+  return {
+    h,
+    bgTop:  hsl(h, 55 + R() * 25, 8 + R() * 8),
+    bgMid:  hsl(h + spread * 0.4, 60, 18 + R() * 12),
+    bgLow:  hsl(h + spread, 65, 30 + R() * 15),
+    ink:    hsl(h + 200, 35, 6),
+    glow:   hsl(h + spread, 95, 72),
+    acc1:   hsl(h + spread * 0.7, 85, 60),
+    acc2:   hsl(h - spread * 0.6, 80, 55),
+    pale:   hsl(h + 40, 40, 88),
+  };
+}
+
+/* ================= scene decor library ================= */
+
+function bgGradient(g, R, p) {
+  if (R() < 0.5) {
+    const gr = g.createLinearGradient(0, 0, 0, TEX);
+    gr.addColorStop(0, p.bgTop); gr.addColorStop(0.55, p.bgMid); gr.addColorStop(1, p.bgLow);
+    g.fillStyle = gr;
+  } else {
+    const gr = g.createRadialGradient(TEX / 2, TEX / 2, TEX * 0.05, TEX / 2, TEX / 2, TEX * 0.75);
+    gr.addColorStop(0, p.bgLow); gr.addColorStop(0.6, p.bgMid); gr.addColorStop(1, p.bgTop);
+    g.fillStyle = gr;
+  }
+  g.fillRect(0, 0, TEX, TEX);
+  // grain
+  for (let i = 0; i < 900; i++) {
+    g.fillStyle = hsl(p.h + R() * 80, 60, 20 + R() * 60, 0.04);
+    const r = 1 + R() * 3;
+    g.beginPath(); g.arc(R() * TEX, R() * TEX, r, 0, 7); g.fill();
+  }
+}
+
+function decorRays(g, R, p) {
+  const n = 18 + Math.floor(R() * 30), cx = TEX / 2, cy = TEX / 2;
+  g.save(); g.translate(cx, cy); g.rotate(R() * 7);
+  for (let i = 0; i < n; i++) {
+    if (i % 2) continue;
+    const a0 = (i / n) * Math.PI * 2, a1 = ((i + 1) / n) * Math.PI * 2;
+    g.fillStyle = hsl(p.h + i * 3, 80, 65, 0.05 + R() * 0.07);
+    g.beginPath(); g.moveTo(0, 0);
+    g.arc(0, 0, TEX, a0, a1); g.closePath(); g.fill();
+  }
+  g.restore();
+}
+
+function decorStars(g, R, p) {
+  const n = 120 + R() * 200;
+  for (let i = 0; i < n; i++) {
+    const x = R() * TEX, y = R() * TEX, r = 0.6 + R() * 2.4;
+    g.fillStyle = hsl(p.h + R() * 60, 60, 80 + R() * 20, 0.25 + R() * 0.6);
+    g.beginPath(); g.arc(x, y, r, 0, 7); g.fill();
+    if (R() < 0.12) { // sparkle cross
+      g.strokeStyle = g.fillStyle; g.lineWidth = 1;
+      g.beginPath();
+      g.moveTo(x - r * 4, y); g.lineTo(x + r * 4, y);
+      g.moveTo(x, y - r * 4); g.lineTo(x, y + r * 4);
+      g.stroke();
+    }
+  }
+}
+
+function decorCelestial(g, R, p) {
+  const ang = R() * Math.PI * 2, d = TEX * (0.3 + R() * 0.14);
+  const x = TEX / 2 + Math.cos(ang) * d, y = TEX / 2 + Math.sin(ang) * d;
+  const r = TEX * (0.05 + R() * 0.08);
+  const glow = g.createRadialGradient(x, y, r * 0.2, x, y, r * 3);
+  glow.addColorStop(0, hsl(p.h + 60, 90, 75, 0.55));
+  glow.addColorStop(1, hsl(p.h + 60, 90, 75, 0));
+  g.fillStyle = glow; g.beginPath(); g.arc(x, y, r * 3, 0, 7); g.fill();
+  g.fillStyle = hsl(p.h + 50, 70, 82);
+  g.beginPath(); g.arc(x, y, r, 0, 7); g.fill();
+  // craters or ring
+  if (R() < 0.5) {
+    for (let i = 0; i < 6; i++) {
+      const ca = R() * 7, cd = R() * r * 0.7;
+      g.fillStyle = hsl(p.h + 50, 50, 68, 0.8);
+      g.beginPath(); g.arc(x + Math.cos(ca) * cd, y + Math.sin(ca) * cd, r * (0.06 + R() * 0.14), 0, 7); g.fill();
+    }
+  } else {
+    g.strokeStyle = hsl(p.h + 20, 80, 70, 0.8); g.lineWidth = r * 0.12;
+    g.save(); g.translate(x, y); g.rotate(R() - 0.5); g.scale(1, 0.32);
+    g.beginPath(); g.arc(0, 0, r * 1.7, 0, 7); g.stroke(); g.restore();
+  }
+}
+
+function decorMountains(g, R, p) {
+  for (let j = 0; j < 3; j++) {
+    const baseY = TEX * (0.62 + j * 0.1);
+    g.fillStyle = hsl(p.h + 180 + j * 12, 35, 8 + j * 5, 0.9);
+    g.beginPath(); g.moveTo(-10, TEX + 10);
+    g.lineTo(-10, baseY);
+    let x = 0;
+    while (x < TEX) {
+      x += TEX * (0.04 + R() * 0.09);
+      g.lineTo(x, baseY - R() * TEX * (0.1 - j * 0.02));
+    }
+    g.lineTo(TEX + 10, TEX + 10); g.closePath(); g.fill();
+  }
+}
+
+function decorTentacles(g, R, p) {
+  const n = 3 + Math.floor(R() * 5);
+  for (let i = 0; i < n; i++) {
+    const side = Math.floor(R() * 4);
+    let x = side < 2 ? R() * TEX : (side === 2 ? -20 : TEX + 20);
+    let y = side === 0 ? TEX + 20 : side === 1 ? -20 : R() * TEX;
+    let ang = Math.atan2(TEX / 2 - y, TEX / 2 - x) + (R() - 0.5);
+    let rad = TEX * (0.018 + R() * 0.02);
+    const col = hsl(p.h + 150 + R() * 60, 55, 22 + R() * 15);
+    for (let s = 0; s < 70 && rad > 1.2; s++) {
+      g.fillStyle = col;
+      g.beginPath(); g.arc(x, y, rad, 0, 7); g.fill();
+      if (s % 7 === 3) {
+        g.fillStyle = hsl(p.h + 150, 70, 55, 0.7);
+        g.beginPath(); g.arc(x + Math.cos(ang + 1.57) * rad * 0.5, y + Math.sin(ang + 1.57) * rad * 0.5, rad * 0.3, 0, 7); g.fill();
+      }
+      x += Math.cos(ang) * rad * 0.9; y += Math.sin(ang) * rad * 0.9;
+      ang += (R() - 0.5) * 0.5; rad *= 0.965;
+      // steer away from the very centre so the portal stays clear
+      const dc = Math.hypot(x - TEX / 2, y - TEX / 2);
+      if (dc < TEX * 0.2) ang += 0.35;
+    }
+  }
+}
+
+function decorEyes(g, R, p) {
+  const n = 2 + Math.floor(R() * 5);
+  for (let i = 0; i < n; i++) {
+    const a = R() * Math.PI * 2, d = TEX * (0.27 + R() * 0.2);
+    const x = TEX / 2 + Math.cos(a) * d, y = TEX / 2 + Math.sin(a) * d;
+    const w = TEX * (0.03 + R() * 0.05), h = w * (0.45 + R() * 0.2);
+    g.save(); g.translate(x, y); g.rotate((R() - 0.5) * 0.9);
+    g.fillStyle = p.pale;
+    g.beginPath(); g.moveTo(-w, 0);
+    g.quadraticCurveTo(0, -h * 2, w, 0);
+    g.quadraticCurveTo(0, h * 2, -w, 0); g.fill();
+    const ir = h * 0.85;
+    const irg = g.createRadialGradient(0, 0, ir * 0.2, 0, 0, ir);
+    irg.addColorStop(0, p.acc1); irg.addColorStop(1, p.acc2);
+    g.fillStyle = irg; g.beginPath(); g.arc(0, 0, ir, 0, 7); g.fill();
+    g.fillStyle = '#0a0510'; g.beginPath(); g.arc(0, 0, ir * 0.45, 0, 7); g.fill();
+    g.fillStyle = 'rgba(255,255,255,.85)'; g.beginPath(); g.arc(-ir * 0.25, -ir * 0.3, ir * 0.16, 0, 7); g.fill();
+    g.restore();
+  }
+}
+
+function decorClouds(g, R, p) {
+  const n = 4 + Math.floor(R() * 5);
+  for (let i = 0; i < n; i++) {
+    const x = R() * TEX, y = R() * TEX * 0.55, s = TEX * (0.03 + R() * 0.05);
+    g.fillStyle = hsl(p.h + 30, 45, 75, 0.16 + R() * 0.15);
+    for (let j = 0; j < 8; j++) {
+      g.beginPath();
+      g.arc(x + (R() - 0.5) * s * 5, y + (R() - 0.5) * s * 1.6, s * (0.5 + R()), 0, 7);
+      g.fill();
+    }
+  }
+}
+
+function decorSpires(g, R, p) {
+  const n = 6 + Math.floor(R() * 10);
+  for (let i = 0; i < n; i++) {
+    const x = R() * TEX, w = TEX * (0.012 + R() * 0.025);
+    const h = TEX * (0.1 + R() * 0.22), lean = (R() - 0.5) * w * 2;
+    const mushroom = R() < 0.5;
+    g.fillStyle = hsl(p.h + 190 + R() * 40, 40, 12 + R() * 10);
+    g.beginPath();
+    g.moveTo(x - w, TEX);
+    g.quadraticCurveTo(x - w * 0.4 + lean, TEX - h * 0.6, x + lean, TEX - h);
+    g.quadraticCurveTo(x + w * 0.4 + lean, TEX - h * 0.6, x + w, TEX);
+    g.fill();
+    if (mushroom) {
+      g.fillStyle = hsl(p.h + R() * 60, 70, 45 + R() * 20, 0.95);
+      g.save(); g.translate(x + lean, TEX - h); g.scale(1, 0.55);
+      g.beginPath(); g.arc(0, 0, w * (2.2 + R() * 2), Math.PI, 0); g.fill(); g.restore();
+      for (let d = 0; d < 4; d++) {
+        g.fillStyle = hsl(p.h + 60, 60, 80, 0.8);
+        g.beginPath(); g.arc(x + lean + (R() - 0.5) * w * 3, TEX - h - R() * w, w * 0.25, 0, 7); g.fill();
+      }
+    } else {
+      for (let d = 0; d < 5; d++) { // glowing windows
+        g.fillStyle = hsl(p.h + 40, 90, 70, 0.9);
+        g.fillRect(x + lean * (d / 5) - w * 0.15, TEX - h * (0.25 + d * 0.14), w * 0.3, w * 0.42);
+      }
+    }
+  }
+}
+
+function decorOrbs(g, R, p) {
+  const n = 6 + Math.floor(R() * 10);
+  for (let i = 0; i < n; i++) {
+    const a = R() * Math.PI * 2, d = TEX * (0.24 + R() * 0.24);
+    const x = TEX / 2 + Math.cos(a) * d, y = TEX / 2 + Math.sin(a) * d, r = TEX * (0.008 + R() * 0.03);
+    g.fillStyle = hsl(p.h + R() * 90, 75, 60, 0.25 + R() * 0.3);
+    g.beginPath(); g.arc(x, y, r, 0, 7); g.fill();
+    g.strokeStyle = hsl(p.h + 40, 80, 80, 0.6); g.lineWidth = r * 0.12;
+    g.beginPath(); g.arc(x, y, r, -2.4, -0.9); g.stroke();
+  }
+}
+
+function decorChecker(g, R, p) {
+  const horizon = TEX * (0.58 + R() * 0.1), rows = 9, cols = 13;
+  g.save(); g.globalAlpha = 0.28;
+  for (let r = 0; r < rows; r++) {
+    const t0 = Math.pow(r / rows, 2.1), t1 = Math.pow((r + 1) / rows, 2.1);
+    const y0 = horizon + t0 * (TEX - horizon), y1 = horizon + t1 * (TEX - horizon);
+    const w0 = TEX * (0.06 + t0 * 0.35), w1 = TEX * (0.06 + t1 * 0.35);
+    for (let c = -cols; c <= cols; c++) {
+      if ((c + r) % 2) continue;
+      g.fillStyle = c % 4 === 0 ? p.acc2 : p.pale;
+      g.beginPath();
+      g.moveTo(TEX / 2 + c * w0, y0); g.lineTo(TEX / 2 + (c + 1) * w0, y0);
+      g.lineTo(TEX / 2 + (c + 1) * w1, y1); g.lineTo(TEX / 2 + c * w1, y1);
+      g.fill();
+    }
+  }
+  g.restore();
+}
+
+const DECORS = [decorStars, decorCelestial, decorMountains, decorTentacles,
+                decorEyes, decorClouds, decorSpires, decorOrbs, decorChecker];
+
+/* ================= portal frames =================
+   Each frame decorates the centre; the hole itself
+   (diameter TEX/SCALE * 0.96) is punched afterwards. */
+
+const HOLE_R = (TEX / SCALE) * 0.48;
+
+/* Glow is concentric halo strokes, not shadowBlur — geometry scales with
+   the zoom transform so the bloom stays part of the picture at any depth.
+   DSCALE (device px per TEX unit for the layer being painted) lets the
+   halo width cap out in device space: without it the innermost magnified
+   layer draws room-filling translucent strokes and the fill rate hangs. */
+let DSCALE = 1;
+const GLOW_CAP = 170;   // max halo stroke width, device px
+
+function haloWidth(w, m) {
+  return Math.max(w, Math.min(w * m, GLOW_CAP / DSCALE));
+}
+
+function glowRing(g, r, color, width) {
+  g.save();
+  const base = g.globalAlpha;
+  g.strokeStyle = color;
+  for (const [m, a] of [[5.2, .05], [3.4, .11], [2.1, .26], [1.3, .55], [1, 1]]) {
+    g.globalAlpha = base * a;
+    g.lineWidth = haloWidth(width, m);
+    g.beginPath(); g.arc(TEX / 2, TEX / 2, r, 0, 7); g.stroke();
+  }
+  g.restore();
+}
+
+function portalRings(g, R, p) {
+  const base = g.globalAlpha;
+  for (let i = 6; i >= 0; i--) {
+    const r = HOLE_R * (1 + i * 0.16);
+    const w = HOLE_R * (0.1 - i * 0.008);
+    g.strokeStyle = hsl(p.h + i * 22, 85, 55 + i * 4, 0.85);
+    // soft halo under each ring, then the crisp core
+    for (const [m, a] of [[3.0, .12], [1.8, .3], [1, 1]]) {
+      g.globalAlpha = base * a;
+      g.lineWidth = haloWidth(w, m);
+      g.beginPath(); g.arc(TEX / 2, TEX / 2, r, 0, 7); g.stroke();
+    }
+  }
+  g.globalAlpha = base;
+  // tick marks
+  const n = 36;
+  g.strokeStyle = p.pale; g.lineWidth = 3;
+  for (let i = 0; i < n; i++) {
+    const a = (i / n) * Math.PI * 2, r0 = HOLE_R * 2.0, r1 = HOLE_R * (i % 3 ? 2.08 : 2.2);
+    g.beginPath();
+    g.moveTo(TEX / 2 + Math.cos(a) * r0, TEX / 2 + Math.sin(a) * r0);
+    g.lineTo(TEX / 2 + Math.cos(a) * r1, TEX / 2 + Math.sin(a) * r1);
+    g.stroke();
+  }
+}
+
+function portalEye(g, R, p) {
+  const cx = TEX / 2, cy = TEX / 2, w = HOLE_R * 3.4, h = HOLE_R * 2.1;
+  g.save(); g.translate(cx, cy);
+  // lids / almond
+  g.fillStyle = p.ink;
+  g.beginPath(); g.moveTo(-w * 1.12, 0);
+  g.quadraticCurveTo(0, -h * 1.24, w * 1.12, 0);
+  g.quadraticCurveTo(0, h * 1.24, -w * 1.12, 0); g.fill();
+  g.fillStyle = p.pale;
+  g.beginPath(); g.moveTo(-w, 0);
+  g.quadraticCurveTo(0, -h, w, 0);
+  g.quadraticCurveTo(0, h, -w, 0); g.fill();
+  // iris
+  const ir = HOLE_R * 1.75;
+  const irg = g.createRadialGradient(0, 0, HOLE_R * 0.9, 0, 0, ir);
+  irg.addColorStop(0, p.acc1); irg.addColorStop(0.7, p.acc2); irg.addColorStop(1, p.ink);
+  g.fillStyle = irg; g.beginPath(); g.arc(0, 0, ir, 0, 7); g.fill();
+  // iris streaks
+  g.strokeStyle = hsl(p.h + 40, 90, 75, 0.5); g.lineWidth = 3;
+  for (let i = 0; i < 40; i++) {
+    const a = R() * Math.PI * 2;
+    g.beginPath();
+    g.moveTo(Math.cos(a) * HOLE_R * 1.02, Math.sin(a) * HOLE_R * 1.02);
+    g.lineTo(Math.cos(a) * ir * (0.8 + R() * 0.2), Math.sin(a) * ir * (0.8 + R() * 0.2));
+    g.stroke();
+  }
+  // lashes
+  g.strokeStyle = p.ink; g.lineWidth = HOLE_R * 0.09; g.lineCap = 'round';
+  for (let i = 0; i < 9; i++) {
+    const t = -0.85 + (i / 8) * 1.7, lx = t * w, ly = -h * (1 - t * t) * 0.98;
+    g.beginPath(); g.moveTo(lx, ly);
+    g.lineTo(lx + t * HOLE_R * 0.5, ly - HOLE_R * (0.45 + R() * 0.25));
+    g.stroke();
+  }
+  g.restore();
+}
+
+function portalMouth(g, R, p) {
+  const cx = TEX / 2, cy = TEX / 2;
+  g.save(); g.translate(cx, cy);
+  // lips
+  const lw = HOLE_R * 2.6, lh = HOLE_R * 2.2;
+  g.fillStyle = p.acc1;
+  g.beginPath(); g.ellipse(0, 0, lw, lh, 0, 0, 7); g.fill();
+  g.fillStyle = hsl(p.h, 70, 30);
+  g.beginPath(); g.ellipse(0, 0, lw * 0.8, lh * 0.8, 0, 0, 7); g.fill();
+  g.fillStyle = '#120612';
+  g.beginPath(); g.ellipse(0, 0, lw * 0.68, lh * 0.68, 0, 0, 7); g.fill();
+  // teeth around the hole
+  const n = 14;
+  g.fillStyle = p.pale;
+  for (let i = 0; i < n; i++) {
+    const a = (i / n) * Math.PI * 2 + 0.1;
+    const r0 = HOLE_R * 1.55, r1 = HOLE_R * 1.06;
+    const wa = 0.16;
+    g.beginPath();
+    g.moveTo(Math.cos(a - wa) * r0, Math.sin(a - wa) * r0);
+    g.lineTo(Math.cos(a + wa) * r0, Math.sin(a + wa) * r0);
+    g.lineTo(Math.cos(a) * r1, Math.sin(a) * r1);
+    g.fill();
+  }
+  g.restore();
+}
+
+function portalArch(g, R, p) {
+  const cx = TEX / 2, cy = TEX / 2, hw = HOLE_R * 1.0;
+  // hole is arch-shaped: rect + semicircular top, inscribed in the hole square
+  const top = cy - HOLE_R, bot = cy + HOLE_R;
+  // stone frame
+  g.save();
+  g.fillStyle = p.ink;
+  g.fillRect(cx - hw * 1.7, top - hw * 0.9, hw * 3.4, (bot - top) + hw * 1.6);
+  // bricks along arch
+  const n = 11;
+  for (let i = 0; i < n; i++) {
+    const a = Math.PI + (i / (n - 1)) * Math.PI;
+    const bx = cx + Math.cos(a) * hw * 1.28, by = (top + hw) + Math.sin(a) * hw * 1.28;
+    g.save(); g.translate(bx, by); g.rotate(a + Math.PI / 2);
+    g.fillStyle = hsl(p.h + 20, 25, 26 + R() * 14);
+    g.fillRect(-hw * 0.17, -hw * 0.32, hw * 0.34, hw * 0.64);
+    g.strokeStyle = p.ink; g.lineWidth = 4; g.strokeRect(-hw * 0.17, -hw * 0.32, hw * 0.34, hw * 0.64);
+    g.restore();
+  }
+  // side columns
+  for (const s of [-1, 1]) {
+    for (let j = 0; j < 5; j++) {
+      g.fillStyle = hsl(p.h + 20, 25, 24 + R() * 14);
+      const by = top + hw + j * ((bot - top - hw) / 5);
+      g.fillRect(cx + s * hw * 1.05 - (s < 0 ? hw * 0.35 : 0), by, hw * 0.35, (bot - top - hw) / 5 - 4);
+    }
+  }
+  // steps
+  for (let j = 0; j < 3; j++) {
+    g.fillStyle = hsl(p.h + 20, 22, 20 + j * 5);
+    g.fillRect(cx - hw * (1.7 - j * 0.22), bot + j * hw * 0.16, hw * (3.4 - j * 0.44), hw * 0.16);
+  }
+  g.restore();
+}
+
+function portalVortex(g, R, p) {
+  const cx = TEX / 2, cy = TEX / 2, arms = 3 + Math.floor(R() * 3);
+  g.save(); g.translate(cx, cy);
+  g.globalCompositeOperation = 'lighter';
+  for (let a = 0; a < arms; a++) {
+    const off = (a / arms) * Math.PI * 2;
+    for (let t = 0; t < 1; t += 0.012) {
+      const ang = off + t * 5.5;
+      const r = HOLE_R * (2.6 - t * 1.55);
+      const x = Math.cos(ang) * r, y = Math.sin(ang) * r;
+      g.fillStyle = hsl(p.h + t * 140, 90, 60, 0.55 * (1 - t * 0.4));
+      g.beginPath(); g.arc(x, y, HOLE_R * 0.14 * (1 - t * 0.55), 0, 7); g.fill();
+    }
+  }
+  g.restore();
+}
+
+function portalGear(g, R, p) {
+  const cx = TEX / 2, cy = TEX / 2, n = 12;
+  g.save(); g.translate(cx, cy);
+  // toothed outer ring
+  g.fillStyle = hsl(p.h + 210, 20, 16);
+  g.beginPath();
+  for (let i = 0; i <= n * 2; i++) {
+    const a = (i / (n * 2)) * Math.PI * 2;
+    const r = HOLE_R * (i % 2 ? 2.0 : 2.25);
+    g[i ? 'lineTo' : 'moveTo'](Math.cos(a) * r, Math.sin(a) * r);
+  }
+  g.closePath(); g.fill();
+  g.fillStyle = hsl(p.h + 210, 25, 24);
+  g.beginPath(); g.arc(0, 0, HOLE_R * 1.85, 0, 7); g.fill();
+  // bolts
+  for (let i = 0; i < 8; i++) {
+    const a = (i / 8) * Math.PI * 2 + 0.4;
+    g.fillStyle = hsl(p.h + 40, 60, 55);
+    g.beginPath(); g.arc(Math.cos(a) * HOLE_R * 1.55, Math.sin(a) * HOLE_R * 1.55, HOLE_R * 0.1, 0, 7); g.fill();
+  }
+  // radial dashes
+  g.strokeStyle = hsl(p.h + 45, 80, 60, 0.9); g.lineWidth = 6;
+  for (let i = 0; i < 24; i++) {
+    const a = (i / 24) * Math.PI * 2;
+    g.beginPath();
+    g.moveTo(Math.cos(a) * HOLE_R * 1.12, Math.sin(a) * HOLE_R * 1.12);
+    g.lineTo(Math.cos(a) * HOLE_R * 1.3, Math.sin(a) * HOLE_R * 1.3);
+    g.stroke();
+  }
+  g.restore();
+}
+
+const PORTALS = [
+  { draw: portalRings,  hole: 'circle' },
+  { draw: portalEye,    hole: 'circle' },
+  { draw: portalMouth,  hole: 'circle' },
+  { draw: portalArch,   hole: 'arch'   },
+  { draw: portalVortex, hole: 'circle' },
+  { draw: portalGear,   hole: 'circle' },
+];
+
+function holePath(g, kind) {
+  const cx = TEX / 2, cy = TEX / 2;
+  if (kind === 'arch') {
+    const hw = HOLE_R * 0.82;
+    g.moveTo(cx - hw, cy + HOLE_R);
+    g.lineTo(cx - hw, cy - HOLE_R + hw);
+    g.arc(cx, cy - HOLE_R + hw, hw, Math.PI, 0);
+    g.lineTo(cx + hw, cy + HOLE_R);
+    g.closePath();
+  } else {
+    g.arc(cx, cy, HOLE_R, 0, 7);
+  }
+}
+
+/* ================= scene assembly ================= */
+
+/* The deterministic head of a scene: the same (seed, i) always yields the
+   same palette and portal choice. Shared so buildScenes can learn a
+   scene's hole shape without drawing anything, and paintScene can't drift
+   out of sync with it. */
+function sceneSetup(i) {
+  const R = mulberry32((seed * 7919 + i * 104729) >>> 0);
+  const p = makePalette(R);
+  const portal = PORTALS[Math.floor(R() * PORTALS.length)];
+  return { R, p, portal };
+}
+
+/* Paints one whole scene live, in TEX-space, onto the transformed canvas.
+   Every layer is drawn this way — no raster cache — so shapes stay vector-
+   crisp at any zoom and there is no second render path to disagree with.
+   The hole is kept clear with an even-odd clip; the glow ring is stroked
+   after the clip is released so its bloom can spill across the rim. */
+function paintScene(g, i) {
+  const { R, p, portal } = sceneSetup(i);
+
+  g.save();
+  g.beginPath();
+  g.rect(0, 0, TEX, TEX);
+  holePath(g, portal.hole);
+  g.clip('evenodd');
+
+  bgGradient(g, R, p);
+  if (R() < 0.55) decorRays(g, R, p);
+
+  // pick 3–4 distinct decorations
+  const pool = DECORS.slice();
+  const nDecor = 3 + Math.floor(R() * 2);
+  for (let d = 0; d < nDecor && pool.length; d++) {
+    const idx = Math.floor(R() * pool.length);
+    pool.splice(idx, 1)[0](g, R, p);
+  }
+
+  // vignette
+  const v = g.createRadialGradient(TEX / 2, TEX / 2, TEX * 0.35, TEX / 2, TEX / 2, TEX * 0.72);
+  v.addColorStop(0, 'rgba(0,0,0,0)'); v.addColorStop(1, 'rgba(0,0,0,.55)');
+  g.fillStyle = v; g.fillRect(0, 0, TEX, TEX);
+
+  // darkened backing behind frame so decor doesn't clash
+  const back = g.createRadialGradient(TEX / 2, TEX / 2, HOLE_R * 0.8, TEX / 2, TEX / 2, HOLE_R * 3);
+  back.addColorStop(0, 'rgba(0,0,0,.75)'); back.addColorStop(1, 'rgba(0,0,0,0)');
+  g.fillStyle = back;
+  g.beginPath(); g.arc(TEX / 2, TEX / 2, HOLE_R * 3, 0, 7); g.fill();
+
+  portal.draw(g, R, p);
+
+  g.restore();
+  glowRing(g, HOLE_R * 1.02, p.glow, HOLE_R * 0.07);
+}
+
+/* ================= player ================= */
+
+let seed = 0, scenes = [];
+function initSeed() {
+  const h = parseInt(location.hash.slice(1), 10);
+  seed = Number.isFinite(h) ? h : Math.floor(Math.random() * 1e9);
+  location.hash = seed;
+}
+/* Each scene is baked once into a TEX-sized offscreen canvas with the exact
+   same paintScene() that draws live, so a cached blit and a live vector
+   repaint are pixel-identical wherever they meet — no seam to flicker across.
+   Only the layer(s) magnified past TEX device px repaint live in draw();
+   everything farther out becomes a single cheap drawImage. */
+function buildScenes() {
+  scenes = [];
+  DSCALE = 1;
+  for (let i = 0; i < NSCENE; i++) {
+    const cache = document.createElement('canvas');
+    cache.width = cache.height = TEX;
+    paintScene(cache.getContext('2d'), i);
+    scenes.push({ hole: sceneSetup(i).portal.hole, cache });
+  }
+}
+
+let t = 0;                 // continuous position in "layers"
+let speed = 0.11;          // layers per second
+let paused = false;
+let running = false;
+let panX = 0, panY = 0, targetPanX = 0, targetPanY = 0;
+let lastNow = 0;
+
+// the screen-following drift settles to neutral over the top-right controls
+// so reaching for a button doesn't swing the world under it
+const CORNER_W = 180, CORNER_H = 120;
+const inCornerControls = (x, y) => x > innerWidth - CORNER_W && y < CORNER_H;
+
+function stopFollowing() { targetPanX = targetPanY = 0; }
+
+addEventListener('mousemove', e => {
+  if (inCornerControls(e.clientX, e.clientY)) { stopFollowing(); return; }
+  targetPanX = (e.clientX / innerWidth - 0.5) * 46 * DPR;
+  targetPanY = (e.clientY / innerHeight - 0.5) * 46 * DPR;
+});
+
+/* custom cursor: only inside the quilt (the start screen has the lens
+   ring instead), follows the pointer, fades out after 3s idle */
+const cursorEl = document.getElementById('cursor');
+let cursorTimer;
+function wakeCursor(e) {
+  if (!running) return;
+  if (e && e.clientX !== undefined) {
+    cursorEl.style.left = e.clientX + 'px';
+    cursorEl.style.top  = e.clientY + 'px';
+  }
+  cursorEl.style.opacity = '1';
+  clearTimeout(cursorTimer);
+  // when the cursor fades from idleness, the world settles too
+  cursorTimer = setTimeout(() => { cursorEl.style.opacity = '0'; stopFollowing(); }, 3000);
+}
+addEventListener('mousemove', wakeCursor);
+addEventListener('mousedown', wakeCursor);
+addEventListener('wheel', wakeCursor, { passive: true });
+document.documentElement.addEventListener('mouseleave', () => {
+  clearTimeout(cursorTimer);
+  cursorEl.style.opacity = '0';
+  stopFollowing();
+});
+addEventListener('wheel', e => {
+  speed = Math.max(-1.2, Math.min(1.6, speed + (e.deltaY > 0 ? -0.025 : 0.025)));
+  showHud();
+}, { passive: true });
+
+const mod = (a, n) => ((a % n) + n) % n;
+
+/* ================= zipper transition =================
+   At each 47s seed hop the world unzips down the middle: the halves peel
+   apart along a wavy rainbow tear into black, the seed swaps in the dark,
+   and the zipper closes back up over the new world. The pull's direction
+   and tempo follow the zoom the viewer was riding when the hop fired.
+   The very first entrance skips straight to the close phase — there's no
+   old world to peel apart yet, so it just zips shut over the opening seed. */
+
+const ZIP_TAPER = 0.45;   // how long the open V trails behind the head, travel units
+const ZIP_HMAX  = 2.0;    // head overshoot so every scanline reaches full separation
+const ZIP_BLACK = 0.06;   // seconds of held black covering the new world's bake
+const ZIP_FADE  = 2;      // seconds the seam ornaments take to fade out once fully closed
+
+const zip = { active: false, phase: 'open', h: 0, rate: 1, down: true, blackLeft: 0, fadeLeft: 0, onSwap: null };
+
+const ZIP_SLOW = 3;   // stretch the open/close travel to 300% of cruise duration; black hold stays short
+
+function startZip(onSwap, revealOnly) {
+  if (zip.active) return;
+  const mult = Math.max(0.35, Math.min(3, Math.abs(speed) / 0.11));
+  zip.active = true;
+  zip.phase = revealOnly ? 'close' : 'open';
+  zip.h = revealOnly ? ZIP_HMAX : -0.05;
+  zip.rate = ((ZIP_HMAX + 0.1) / 1.35) * mult / ZIP_SLOW;   // ~1.35s a phase at cruise speed, before slowdown
+  zip.down = speed >= 0;
+  zip.blackLeft = ZIP_BLACK;
+  zip.onSwap = onSwap;
+}
+
+function cancelZip() {
+  zip.active = false;
+  zip.onSwap = null;
+}
+
+function stepZip(dt) {
+  if (zip.phase === 'open') {
+    zip.h += zip.rate * dt;
+    if (zip.h >= ZIP_HMAX) {
+      zip.h = ZIP_HMAX; zip.phase = 'black';
+      if (zip.onSwap) { zip.onSwap(); zip.onSwap = null; }
+    }
+  } else if (zip.phase === 'black') {
+    zip.blackLeft -= dt;
+    if (zip.blackLeft <= 0) zip.phase = 'close';
+  } else if (zip.phase === 'close') {
+    zip.h -= zip.rate * dt;
+    if (zip.h <= -0.05) {
+      zip.h = -0.05; zip.phase = 'fade'; zip.fadeLeft = ZIP_FADE;
+    }
+  } else {
+    zip.fadeLeft -= dt;
+    if (zip.fadeLeft <= 0) zip.active = false;
+  }
+}
+
+/* openness and torn-edge x positions for one scanline; the two edges wave
+   on different frequencies so the tear breathes instead of tracking rigid */
+function zipEdges(y, now) {
+  const u = zip.down ? y / H : 1 - y / H;
+  const o = Math.min(1, Math.max(0, (zip.h - u) / ZIP_TAPER));
+  const base = W * 0.62 * Math.pow(o, 1.4);
+  const xL = W / 2 - base - Math.sin(y * 0.021 + now * 0.005) * 16 * DPR * o;
+  const xR = W / 2 + base + Math.sin(y * 0.019 - now * 0.0045 + 2) * 16 * DPR * o;
+  return { o, xL, xR };
+}
+
+function compositeZip(now) {
+  const half = W / 2;
+  const px = Math.max(0.75, DPR);
+  // once fully closed, the seam sits idle while its ornaments fade out
+  const fadeAlpha = zip.phase === 'fade' ? Math.max(0, zip.fadeLeft / ZIP_FADE) : 1;
+  ctx.fillStyle = '#020107';
+  ctx.fillRect(0, 0, W, H);
+
+  // the two peeled halves, blitted in thin strips so the tear can wave
+  const stripH = Math.max(2, Math.round(H / 360));
+  for (let y = 0; y < H; y += stripH) {
+    const e = zipEdges(y + stripH / 2, now);
+    if (e.o <= 0) { ctx.drawImage(off, 0, y, W, stripH, 0, y, W, stripH); continue; }
+    if (e.xL > 0) ctx.drawImage(off, 0, y, half, stripH, e.xL - half, y, half, stripH);
+    if (e.xR < W) ctx.drawImage(off, half, y, half, stripH, e.xR, y, half, stripH);
+  }
+
+  // ornaments bloom over the void
+  ctx.save();
+  ctx.globalCompositeOperation = 'lighter';
+
+  // hue-cycling rainbow runs the length of both torn edges
+  const grad = ctx.createLinearGradient(0, 0, 0, H);
+  for (let i = 0; i <= 4; i++) {
+    grad.addColorStop(i / 4, `hsl(${(now * 0.05 + i * 80) % 360},100%,62%)`);
+  }
+  ctx.strokeStyle = grad;
+  for (const side of [0, 1]) {
+    ctx.beginPath();
+    for (let y = 0; y <= H; y += 16) {
+      const e = zipEdges(y, now);
+      const x = side ? e.xR : e.xL;
+      y === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+    }
+    for (const [w, a] of [[18, .10], [8, .3], [2.5, .9]]) {
+      ctx.globalAlpha = a * fadeAlpha;
+      ctx.lineWidth = w * px;
+      ctx.stroke();
+    }
+  }
+  ctx.globalAlpha = fadeAlpha;
+
+  // teeth: interlocked along the closed seam, lining both edges where torn
+  const tw = 5 * px, th = 3.4 * px, step = Math.max(12, 16 * px);
+  let n = 0;
+  for (let y = step / 2; y < H; y += step, n++) {
+    const e = zipEdges(y, now);
+    ctx.fillStyle = `hsl(${(y * 0.4 + now * 0.12) % 360},95%,66%)`;
+    if (e.o <= 0.03) {
+      ctx.fillRect(W / 2 + (n % 2 ? 1.5 * px : -1.5 * px) - tw / 2, y - th / 2, tw, th);
+    } else {
+      ctx.fillRect(e.xL - tw * 0.3, y - th / 2, tw, th);
+      ctx.fillRect(e.xR - tw * 0.7, y - th / 2, tw, th);
+    }
+  }
+
+  // the pull: a glowing slider riding the head
+  const headY = (zip.down ? zip.h : 1 - zip.h) * H;
+  if (headY > -60 * px && headY < H + 60 * px) {
+    const hx = W / 2, r = 15 * px;
+    for (const [rr, w, a] of [[r * 1.9, 7, .18], [r * 1.3, 4, .45], [r, 2.5, 1]]) {
+      ctx.globalAlpha = a * fadeAlpha;
+      ctx.strokeStyle = `hsl(${(now * 0.15) % 360},100%,70%)`;
+      ctx.lineWidth = w * px;
+      ctx.beginPath(); ctx.arc(hx, headY, rr, 0, 7); ctx.stroke();
+    }
+    ctx.globalAlpha = 0.95 * fadeAlpha;
+    ctx.fillStyle = `hsl(${(now * 0.15 + 180) % 360},100%,72%)`;
+    const d = 7 * px;
+    ctx.beginPath();
+    ctx.moveTo(hx, headY - d); ctx.lineTo(hx + d, headY);
+    ctx.lineTo(hx, headY + d); ctx.lineTo(hx - d, headY);
+    ctx.closePath(); ctx.fill();
+    // trailing tab hangs off the back of the head's travel
+    const headMovingDown = (zip.phase !== 'close') === zip.down;
+    const yTab = headMovingDown ? headY - r * 1.1 - 22 * px : headY + r * 1.1;
+    ctx.globalAlpha = 0.55 * fadeAlpha;
+    ctx.fillRect(hx - 3.5 * px, yTab, 7 * px, 22 * px);
+  }
+  ctx.restore();
+}
+
+/* adaptive resolution: eases renderScale down when frames run long and back
+   up once there's headroom, so one page holds its framerate across whatever
+   GPU it lands on instead of committing to a fixed quality tier. EMA
+   smoothing plus a cooldown keep it from thrashing the backing store. */
+const RS_STEP_DOWN = 1000 / 55, RS_STEP_UP = 1000 / 58;
+let frameEMA = RS_STEP_DOWN, lastScaleChange = 0, warmupUntil = 0;
+
+function governResolution(now, dt) {
+  frameEMA += (dt * 1000 - frameEMA) * 0.08;
+  if (now < warmupUntil || now - lastScaleChange < 700) return;
+  if (frameEMA > RS_STEP_DOWN && renderScale > RS_MIN) {
+    renderScale = Math.max(RS_MIN, renderScale - 0.1);
+  } else if (frameEMA < RS_STEP_UP && renderScale < RS_MAX) {
+    renderScale = Math.min(RS_MAX, renderScale + 0.05);
+  } else {
+    return;
+  }
+  lastScaleChange = now; frameEMA = RS_STEP_DOWN; resize();
+}
+
+function draw(now) {
+  requestAnimationFrame(draw);
+  const dt = Math.min((now - lastNow) / 1000, 0.1);
+  lastNow = now;
+  if (W === 0 || H === 0) resize();   // window reported no size at load
+  if (!running || W === 0) return;
+  governResolution(now, dt);
+  if (!paused) t += speed * dt;
+  if (zip.active) stepZip(dt);
+  // mid-zip the world draws offscreen; compositeZip tears it apart below
+  const g = zip.active ? offCtx : ctx;
+
+  panX += (targetPanX - panX) * 0.04;
+  panY += (targetPanY - panY) * 0.04;
+
+  const idx = Math.floor(t), frac = t - idx;
+  const zoom = Math.pow(SCALE, frac);
+  const base = Math.max(W, H) * 1.14;
+  const roll = Math.sin(now * 0.00006) * 0.035;
+
+  // farthest screen corner from the zoom centre — layer fades key off this
+  const ox = W / 2 + panX, oy = H / 2 + panY;
+  const reach = Math.max(Math.hypot(ox, oy), Math.hypot(W - ox, oy),
+                         Math.hypot(ox, H - oy), Math.hypot(W - ox, H - oy));
+
+  g.fillStyle = '#05030a';
+  g.fillRect(0, 0, W, H);
+  g.save();
+  g.translate(ox, oy);
+  g.rotate(roll);
+
+  // beyond this on-screen size the TEX-sized cache would need a visible
+  // upscale, so only layers past it pay for a live vector repaint
+  const VECTOR_THRESHOLD = TEX * 1.15;
+
+  for (let k = 4; k >= -2; k--) {
+    const s = base * zoom * Math.pow(SCALE, -k);
+    if (s < 1) continue;
+    const sc = scenes[mod(idx + k, NSCENE)];
+    // how far the hole has swallowed the screen (1 = corners just covered)
+    const swallow = s * (HOLE_R * (sc.hole === 'arch' ? 0.82 : 1) / TEX) / reach;
+    if (swallow > 1.35) continue;
+    // fade in from sub-pixel size at the far end, fade out as the last
+    // glow slides off screen — no hard pop at either end
+    const a = Math.min(1, (s - 1) / 44, (1.35 - swallow) / 0.3);
+    if (a <= 0) continue;
+    g.globalAlpha = a;
+    // Clip to the screen so the magnified layers' draw sizes stay bounded.
+    g.save();
+    g.beginPath();
+    g.rect(-reach - 64, -reach - 64, (reach + 64) * 2, (reach + 64) * 2);
+    g.clip();
+    g.scale(s / TEX, s / TEX);
+    g.translate(-TEX / 2, -TEX / 2);
+    if (s < VECTOR_THRESHOLD) {
+      g.drawImage(sc.cache, 0, 0, TEX, TEX);   // cheap blit, identical pixels to a live paint here
+    } else {
+      DSCALE = s / TEX;
+      paintScene(g, mod(idx + k, NSCENE));
+    }
+    g.restore();
+  }
+  DSCALE = 1;
+  g.globalAlpha = 1;
+  g.restore();
+
+  if (zip.active) compositeZip(now);
+}
+requestAnimationFrame(draw);
+
+/* ================= generative audio =================
+   A slow detuned drone + echoing pentatonic bells,
+   all synthesized — no audio files. Starts unmuted. */
+
+let AC, master, muted = false;
+
+/* framed on a Frutiger Gallery live wall, the hall streams placement for this
+   page's sound — postMessage {type:'fg-audio', gain, pan} at ~10 Hz: gain
+   falls with the visitor's distance and ducks behind their head, pan follows
+   which ear the slab hangs off. A gain→pan pair between master and the
+   speakers rides it; standalone the pair idles at unity and nothing writes. */
+let hallGain = null, hallPan = null, hallWant = { gain: 1, pan: 0 };
+addEventListener('message', e => {
+  const d = e.data;
+  if (!d || d.type !== 'fg-audio' || !isFinite(d.gain) || !isFinite(d.pan)) return;
+  hallWant = {
+    gain: Math.min(Math.max(+d.gain, 0), 1),
+    pan:  Math.min(Math.max(+d.pan, -1), 1),
+  };
+  if (!AC) return;                      // heard before entry — startAudio seeds from hallWant
+  const t0 = AC.currentTime;            // smooth each ~10 Hz hop so walking glides, not zips
+  hallGain.gain.setTargetAtTime(hallWant.gain, t0, 0.09);
+  if (hallPan) hallPan.pan.setTargetAtTime(hallWant.pan, t0, 0.09);
+});
+
+function startAudio() {
+  AC = new (window.AudioContext || window.webkitAudioContext)();
+  master = AC.createGain();
+  master.gain.value = 0.55;
+  hallGain = AC.createGain();
+  hallGain.gain.value = hallWant.gain;
+  hallPan = AC.createStereoPanner ? AC.createStereoPanner() : null;
+  master.connect(hallGain);
+  if (hallPan) { hallPan.pan.value = hallWant.pan; hallGain.connect(hallPan); hallPan.connect(AC.destination); }
+  else hallGain.connect(AC.destination);
+
+  // --- drone bed ---
+  const droneBus = AC.createGain(); droneBus.gain.value = 0.16;
+  const filt = AC.createBiquadFilter();
+  filt.type = 'lowpass'; filt.frequency.value = 320; filt.Q.value = 1.2;
+  droneBus.connect(filt); filt.connect(master);
+
+  const lfo = AC.createOscillator(); lfo.frequency.value = 0.045;
+  const lfoGain = AC.createGain(); lfoGain.gain.value = 170;
+  lfo.connect(lfoGain); lfoGain.connect(filt.frequency); lfo.start();
+
+  [[55, 'sawtooth', 0.5], [55.35, 'sawtooth', 0.4], [110.2, 'triangle', 0.5], [27.5, 'sine', 0.9]]
+    .forEach(([f, type, vol]) => {
+      const o = AC.createOscillator(); o.type = type; o.frequency.value = f;
+      const gn = AC.createGain(); gn.gain.value = vol;
+      o.connect(gn); gn.connect(droneBus); o.start();
+    });
+
+  // slow amplitude breathing
+  const breath = AC.createOscillator(); breath.frequency.value = 0.03;
+  const breathGain = AC.createGain(); breathGain.gain.value = 0.05;
+  breath.connect(breathGain); breathGain.connect(droneBus.gain); breath.start();
+
+  // --- echoing bells ---
+  const delay = AC.createDelay(2); delay.delayTime.value = 0.46;
+  const fb = AC.createGain(); fb.gain.value = 0.42;
+  const wet = AC.createGain(); wet.gain.value = 0.5;
+  delay.connect(fb); fb.connect(delay);
+  delay.connect(wet); wet.connect(master);
+
+  const scaleNotes = [0, 3, 5, 7, 10, 12, 15, 17];
+  const rootHz = 220;
+
+  function bell() {
+    if (!AC || AC.state === 'closed') return;
+    const semis = scaleNotes[Math.floor(Math.random() * scaleNotes.length)];
+    const oct = Math.random() < 0.3 ? 2 : 1;
+    const f = rootHz * oct * Math.pow(2, semis / 12);
+    const o = AC.createOscillator(); o.type = 'sine'; o.frequency.value = f;
+    const o2 = AC.createOscillator(); o2.type = 'sine'; o2.frequency.value = f * 2.01;
+    const gn = AC.createGain();
+    const t0 = AC.currentTime;
+    gn.gain.setValueAtTime(0, t0);
+    gn.gain.linearRampToValueAtTime(0.11, t0 + 0.02);
+    gn.gain.exponentialRampToValueAtTime(0.0001, t0 + 3.2);
+    const gn2 = AC.createGain(); gn2.gain.value = 0.35;
+    o.connect(gn); o2.connect(gn2); gn2.connect(gn);
+    gn.connect(master); gn.connect(delay);
+    o.start(t0); o2.start(t0);
+    o.stop(t0 + 3.5); o2.stop(t0 + 3.5);
+    setTimeout(bell, 1800 + Math.random() * 4500);
+  }
+  setTimeout(bell, 900);
+}
+
+function toggleMute() {
+  if (!master) return;
+  muted = !muted;
+  master.gain.linearRampToValueAtTime(muted ? 0 : 0.55, AC.currentTime + 0.15);
+  document.getElementById('btnMute').innerHTML = muted ? '&#128263;' : '&#128266;';
+  showHud();
+}
+
+/* ================= UI ================= */
+
+const hud = document.getElementById('hud');
+let hudTimer;
+function showHud() {
+  hud.textContent =
+    `seed ${seed} · speed ${speed.toFixed(2)} · res ${Math.round(renderScale * 100)}% ${paused ? '· paused' : ''} ${muted ? '· muted' : ''} ${cycling ? '· cycling' : ''}` +
+    ` — scroll: speed · space: pause · M: mute · R: new world · C: cycle · F: fullscreen`;
+  hud.classList.remove('faded');
+  clearTimeout(hudTimer);
+  hudTimer = setTimeout(() => hud.classList.add('faded'), 3500);
+}
+
+function setSeed(s) {
+  seed = s;
+  location.hash = seed;
+  buildScenes();
+  warmupUntil = performance.now() + 500;   // rebaking 10 caches is a one-off hitch, not sustained load
+  t = 0;
+}
+
+function regenerate() {
+  // same unzip-in-the-dark-rezip hop the 47s cycle uses, just fired on demand
+  startZip(() => { setSeed(Math.floor(Math.random() * 1e9)); showHud(); });
+}
+
+/* seed cycle: while on, hops to a fresh random seed every 47s;
+   toggling off resets the timer and returns to the seed that was
+   showing when the cycle started */
+const CYCLE_MS = 47000;
+let cycling = true, cycleTimer = null, cycleHomeSeed = null;
+
+function startCycling() {
+  cycleHomeSeed = seed;
+  cycleTimer = setInterval(() => {
+    // seed hops arrive through the zipper; the swap fires at full black
+    startZip(() => { setSeed(Math.floor(Math.random() * 1e9)); showHud(); });
+  }, CYCLE_MS);
+}
+
+function stopCycling() {
+  clearInterval(cycleTimer);
+  cycleTimer = null;
+  cancelZip();   // a hop mid-flight would override the home-seed restore below
+  if (cycleHomeSeed !== null && cycleHomeSeed !== seed) setSeed(cycleHomeSeed);
+}
+
+function toggleCycle() {
+  cycling = !cycling;
+  document.getElementById('btnCycle').classList.toggle('active', cycling);
+  if (cycling) startCycling(); else stopCycling();
+  showHud();
+}
+
+/* start-screen lens: the ring trails the cursor, carrying a clear
+   "safe" porthole while the rest of the screen blurs in slowly —
+   straying out ahead of the ring (the blur zone) whips it into an
+   excited, faster pulse until it catches back up. */
+const enterEl = document.getElementById('enter');
+const ringEl  = enterEl.querySelector('.ring');
+const LENS_R  = 90;
+let enterActive = true;
+let lensX = innerWidth / 2, lensY = innerHeight / 2;
+let mouseX = lensX, mouseY = lensY;
+let lensBlur = 0;
+
+addEventListener('mousemove', e => { mouseX = e.clientX; mouseY = e.clientY; });
+
+function lensTick() {
+  if (!enterActive) return;
+  requestAnimationFrame(lensTick);
+  lensX += (mouseX - lensX) * 0.12;
+  lensY += (mouseY - lensY) * 0.12;
+  const excited = Math.hypot(mouseX - lensX, mouseY - lensY) > LENS_R;
+  ringEl.classList.toggle('excited', excited);
+  lensBlur = Math.min(16, lensBlur + (excited ? 0.35 : 0.06));
+  enterEl.style.setProperty('--mx', lensX + 'px');
+  enterEl.style.setProperty('--my', lensY + 'px');
+  enterEl.style.setProperty('--blur', lensBlur.toFixed(2) + 'px');
+}
+requestAnimationFrame(lensTick);
+
+/* ---------------- touch (phones / tablets) ----------------
+   One finger drives the same lens + parallax that the mouse does; a
+   two-finger vertical drag takes the place of the scroll wheel for
+   zoom speed. Default gestures (scroll, pinch-zoom, double-tap zoom)
+   are suppressed while playing so the canvas owns the surface. */
+let pinchMidY = null;
+
+function touchPan(t) {
+  mouseX = t.clientX; mouseY = t.clientY;              // start-screen lens
+  targetPanX = (t.clientX / innerWidth  - 0.5) * 46 * DPR;
+  targetPanY = (t.clientY / innerHeight - 0.5) * 46 * DPR;
+}
+
+addEventListener('touchstart', e => {
+  if (e.touches[0]) touchPan(e.touches[0]);
+  if (e.touches.length >= 2)
+    pinchMidY = (e.touches[0].clientY + e.touches[1].clientY) / 2;
+}, { passive: true });
+
+addEventListener('touchmove', e => {
+  if (e.touches.length >= 2) {                          // two fingers → speed
+    const midY = (e.touches[0].clientY + e.touches[1].clientY) / 2;
+    if (pinchMidY !== null && running) {
+      speed = Math.max(-1.2, Math.min(1.6, speed + (pinchMidY - midY) * 0.004));
+      showHud();
+    }
+    pinchMidY = midY;
+  } else if (e.touches[0]) {                            // one finger → drift
+    touchPan(e.touches[0]);
+  }
+  if (running) e.preventDefault();                      // block page scroll/zoom in the quilt
+}, { passive: false });
+
+addEventListener('touchend', e => {
+  if (e.touches.length < 2) pinchMidY = null;
+}, { passive: true });
+
+function enterQuilt() {
+  if (!enterActive) return;
+  enterActive = false;
+  document.getElementById('enter').classList.add('hidden');
+  running = true;
+  warmupUntil = performance.now() + 1200;   // let the first frames settle before the governor judges them
+  startAudio();
+  startZip(null, true);   // zip closed over the opening seed instead of popping in
+  if (cycling) startCycling();
+  showHud();
+}
+document.getElementById('enter').addEventListener('click', enterQuilt);
+
+addEventListener('keydown', e => {
+  if (!running) return;
+  if (e.code === 'Space') { paused = !paused; showHud(); }
+  else if (e.key === 'm' || e.key === 'M') toggleMute();
+  else if (e.key === 'r' || e.key === 'R') regenerate();
+  else if (e.key === 'c' || e.key === 'C') toggleCycle();
+  else if (e.key === 'f' || e.key === 'F') {
+    document.fullscreenElement ? document.exitFullscreen() : document.documentElement.requestFullscreen();
+  }
+  else if (e.key === 'ArrowUp')   { speed = Math.min(1.6, speed + 0.025); showHud(); }
+  else if (e.key === 'ArrowDown') { speed = Math.max(-1.2, speed - 0.025); showHud(); }
+});
+
+document.getElementById('btnMute').addEventListener('click', toggleMute);
+document.getElementById('btnRegen').addEventListener('click', regenerate);
+document.getElementById('btnCycle').addEventListener('click', toggleCycle);
+document.getElementById('btnCycle').classList.toggle('active', cycling);   // cycle is on by default
+document.getElementById('btnFull').addEventListener('click', () => {
+  document.fullscreenElement ? document.exitFullscreen() : document.documentElement.requestFullscreen();
+});
+
+/* ---------------- boot ---------------- */
+initSeed();
+buildScenes();
+</script>
+</body>
+</html>
