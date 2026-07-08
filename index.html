@@ -13,15 +13,15 @@
 <meta property="og:site_name" content="Procedural Quilt">
 <meta property="og:title" content="Procedural Quilt">
 <meta property="og:description" content="An infinite procedural zoom">
-<meta property="og:url" content="https://procedural-quilt.pages.dev/">
-<meta property="og:image" content="https://procedural-quilt.pages.dev/og-banner-v2.jpg">
+<meta property="og:url" content="https://your-procedural-quilt.pages.dev/">
+<meta property="og:image" content="https://your-procedural-quilt.pages.dev/og-banner-v2.jpg">
 <meta property="og:image:width" content="1200">
 <meta property="og:image:height" content="630">
 <meta property="og:image:alt" content="Nested procedural portals zooming inward">
 <meta name="twitter:card" content="summary_large_image">
 <meta name="twitter:title" content="Procedural Quilt">
 <meta name="twitter:description" content="An infinite procedural zoom">
-<meta name="twitter:image" content="https://procedural-quilt.pages.dev/og-banner-v2.jpg">
+<meta name="twitter:image" content="https://your-procedural-quilt.pages.dev/og-banner-v2.jpg">
 
 <!-- favicon set (eye) -->
 <link rel="icon" href="favicon.svg" type="image/svg+xml">
@@ -82,12 +82,15 @@
     position: fixed; left: 14px; bottom: 12px; z-index: 5;
     color: rgba(255,255,255,.55); font: 11px/1.7 ui-monospace, Consolas, monospace;
     letter-spacing: .06em; pointer-events: none;
-    transition: opacity 1s ease;
+    transition: opacity .8s ease;
   }
-  #hud.faded { opacity: 0; }
 
-  #buttons { position: fixed; right: 12px; top: 12px; z-index: 5; display: flex; gap: 8px; opacity: .35; transition: opacity .3s; }
+  #buttons { position: fixed; right: 12px; top: 12px; z-index: 5; display: flex; gap: 8px; opacity: .35; transition: opacity .8s ease; }
   #buttons:hover { opacity: 1; }
+
+  /* the top-right controls and the HUD tip line hide together after 10s idle */
+  body.chrome-hidden #buttons,
+  body.chrome-hidden #hud { opacity: 0; pointer-events: none; }
   #buttons button {
     background: rgba(0,0,0,.4); color: #fff; border: 1px solid rgba(255,255,255,.25);
     border-radius: 6px; width: 34px; height: 30px; cursor: none; font-size: 14px;
@@ -735,17 +738,23 @@ let speed = 0.11;          // layers per second
 let paused = false;
 let running = false;
 let panX = 0, panY = 0, targetPanX = 0, targetPanY = 0;
+let panEase = 0.04;                        // per-frame drift lerp
+const PAN_FOLLOW = 0.04;                   // snappy while tracking the cursor
+const PAN_RECENTER = PAN_FOLLOW / 5.2;     // ~420% slower easing back to neutral
 let lastNow = 0;
 
 // the screen-following drift settles to neutral over the top-right controls
 // so reaching for a button doesn't swing the world under it
 const CORNER_W = 180, CORNER_H = 120;
 const inCornerControls = (x, y) => x > innerWidth - CORNER_W && y < CORNER_H;
+let pointerInCorner = false;
 
-function stopFollowing() { targetPanX = targetPanY = 0; }
+function stopFollowing() { targetPanX = targetPanY = 0; panEase = PAN_RECENTER; }
 
 addEventListener('mousemove', e => {
-  if (inCornerControls(e.clientX, e.clientY)) { stopFollowing(); return; }
+  pointerInCorner = inCornerControls(e.clientX, e.clientY);
+  if (pointerInCorner) { stopFollowing(); return; }
+  panEase = PAN_FOLLOW;
   targetPanX = (e.clientX / innerWidth - 0.5) * 46 * DPR;
   targetPanY = (e.clientY / innerHeight - 0.5) * 46 * DPR;
 });
@@ -761,6 +770,7 @@ function wakeCursor(e) {
     cursorEl.style.top  = e.clientY + 'px';
   }
   cursorEl.style.opacity = '1';
+  showChrome();
   clearTimeout(cursorTimer);
   // when the cursor fades from idleness, the world settles too
   cursorTimer = setTimeout(() => { cursorEl.style.opacity = '0'; stopFollowing(); }, 3000);
@@ -773,6 +783,27 @@ document.documentElement.addEventListener('mouseleave', () => {
   cursorEl.style.opacity = '0';
   stopFollowing();
 });
+
+/* ---- auto-hiding control chrome (top-right buttons + HUD tip line) ----
+   Pointer activity reveals them and arms a 10s idle hide; they stay pinned
+   while the cursor is in the corner zone. Keyboard/button use only rewrites
+   the HUD text, so working the controls never forces the menu back up. The
+   entry zipper defers the first countdown until it has finished fading. */
+const CHROME_MS = 10000;
+let chromeTimer = null;
+
+function revealChrome() { document.body.classList.remove('chrome-hidden'); }
+
+function armChromeHide() {
+  clearTimeout(chromeTimer);
+  chromeTimer = null;
+  if (pointerInCorner) return;             // pinned while you're on the controls
+  if (paused) return;                      // pinned while paused, too
+  if (zip.active && zip.reveal) return;    // wait out the entry zipper first
+  chromeTimer = setTimeout(() => document.body.classList.add('chrome-hidden'), CHROME_MS);
+}
+
+function showChrome() { revealChrome(); armChromeHide(); }
 addEventListener('wheel', e => {
   speed = Math.max(-1.2, Math.min(1.6, speed + (e.deltaY > 0 ? -0.025 : 0.025)));
   showHud();
@@ -793,7 +824,7 @@ const ZIP_HMAX  = 2.0;    // head overshoot so every scanline reaches full separ
 const ZIP_BLACK = 0.06;   // seconds of held black covering the new world's bake
 const ZIP_FADE  = 2;      // seconds the seam ornaments take to fade out once fully closed
 
-const zip = { active: false, phase: 'open', h: 0, rate: 1, down: true, blackLeft: 0, fadeLeft: 0, onSwap: null };
+const zip = { active: false, reveal: false, phase: 'open', h: 0, rate: 1, down: true, blackLeft: 0, fadeLeft: 0, onSwap: null };
 
 const ZIP_SLOW = 3;   // stretch the open/close travel to 300% of cruise duration; black hold stays short
 
@@ -801,6 +832,7 @@ function startZip(onSwap, revealOnly) {
   if (zip.active) return;
   const mult = Math.max(0.35, Math.min(3, Math.abs(speed) / 0.11));
   zip.active = true;
+  zip.reveal = !!revealOnly;
   zip.phase = revealOnly ? 'close' : 'open';
   zip.h = revealOnly ? ZIP_HMAX : -0.05;
   zip.rate = ((ZIP_HMAX + 0.1) / 1.35) * mult / ZIP_SLOW;   // ~1.35s a phase at cruise speed, before slowdown
@@ -831,7 +863,11 @@ function stepZip(dt) {
     }
   } else {
     zip.fadeLeft -= dt;
-    if (zip.fadeLeft <= 0) zip.active = false;
+    if (zip.fadeLeft <= 0) {
+      zip.active = false;
+      // entry zipper has finished fading → begin the 10s control-hide countdown
+      if (zip.reveal) { zip.reveal = false; armChromeHide(); }
+    }
   }
 }
 
@@ -956,12 +992,12 @@ function draw(now) {
   if (!running || W === 0) return;
   governResolution(now, dt);
   if (!paused) t += speed * dt;
-  if (zip.active) stepZip(dt);
+  if (zip.active && !paused) stepZip(dt);   // a mid-flight tear holds frozen while paused
   // mid-zip the world draws offscreen; compositeZip tears it apart below
   const g = zip.active ? offCtx : ctx;
 
-  panX += (targetPanX - panX) * 0.04;
-  panY += (targetPanY - panY) * 0.04;
+  panX += (targetPanX - panX) * panEase;
+  panY += (targetPanY - panY) * panEase;
 
   const idx = Math.floor(t), frac = t - idx;
   const zoom = Math.pow(SCALE, frac);
@@ -1119,14 +1155,12 @@ function toggleMute() {
 /* ================= UI ================= */
 
 const hud = document.getElementById('hud');
-let hudTimer;
+// content only — the chrome controller owns show/hide, so a keypress that
+// rewrites this text never drags the faded menu back onto the screen
 function showHud() {
   hud.textContent =
     `seed ${seed} · speed ${speed.toFixed(2)} · res ${Math.round(renderScale * 100)}% ${paused ? '· paused' : ''} ${muted ? '· muted' : ''} ${cycling ? '· cycling' : ''}` +
     ` — scroll: speed · space: pause · M: mute · R: new world · C: cycle · F: fullscreen`;
-  hud.classList.remove('faded');
-  clearTimeout(hudTimer);
-  hudTimer = setTimeout(() => hud.classList.add('faded'), 3500);
 }
 
 function setSeed(s) {
@@ -1148,12 +1182,16 @@ function regenerate() {
 const CYCLE_MS = 47000;
 let cycling = true, cycleTimer = null, cycleHomeSeed = null;
 
-function startCycling() {
-  cycleHomeSeed = seed;
+function armCycleTimer() {
   cycleTimer = setInterval(() => {
     // seed hops arrive through the zipper; the swap fires at full black
     startZip(() => { setSeed(Math.floor(Math.random() * 1e9)); showHud(); });
   }, CYCLE_MS);
+}
+
+function startCycling() {
+  cycleHomeSeed = seed;
+  armCycleTimer();
 }
 
 function stopCycling() {
@@ -1167,6 +1205,22 @@ function toggleCycle() {
   cycling = !cycling;
   document.getElementById('btnCycle').classList.toggle('active', cycling);
   if (cycling) startCycling(); else stopCycling();
+  showHud();
+}
+
+/* pausing freezes everything time-driven: the zoom (via the draw loop), any
+   in-flight zipper (also the draw loop), the 47s cycle timer, and the
+   control-hide countdown — so a paused piece holds still with its controls
+   up until you resume. */
+function setPaused(p) {
+  paused = p;
+  if (paused) {
+    if (cycleTimer) { clearInterval(cycleTimer); cycleTimer = null; }  // no 47s hop while held
+    revealChrome(); armChromeHide();                                   // controls stay up (armChromeHide bails on paused)
+  } else {
+    if (cycling && !cycleTimer) armCycleTimer();                       // resume the cycle, fresh 47s
+    armChromeHide();                                                   // resume the 10s idle hide
+  }
   showHud();
 }
 
@@ -1207,11 +1261,13 @@ let pinchMidY = null;
 
 function touchPan(t) {
   mouseX = t.clientX; mouseY = t.clientY;              // start-screen lens
+  panEase = PAN_FOLLOW;
   targetPanX = (t.clientX / innerWidth  - 0.5) * 46 * DPR;
   targetPanY = (t.clientY / innerHeight - 0.5) * 46 * DPR;
 }
 
 addEventListener('touchstart', e => {
+  if (running) showChrome();                           // a tap reveals the controls, arms the 10s hide
   if (e.touches[0]) touchPan(e.touches[0]);
   if (e.touches.length >= 2)
     pinchMidY = (e.touches[0].clientY + e.touches[1].clientY) / 2;
@@ -1244,13 +1300,14 @@ function enterQuilt() {
   startAudio();
   startZip(null, true);   // zip closed over the opening seed instead of popping in
   if (cycling) startCycling();
+  revealChrome();         // controls shown now; the 10s hide arms once the zipper fades
   showHud();
 }
 document.getElementById('enter').addEventListener('click', enterQuilt);
 
 addEventListener('keydown', e => {
   if (!running) return;
-  if (e.code === 'Space') { paused = !paused; showHud(); }
+  if (e.code === 'Space') { setPaused(!paused); }
   else if (e.key === 'm' || e.key === 'M') toggleMute();
   else if (e.key === 'r' || e.key === 'R') regenerate();
   else if (e.key === 'c' || e.key === 'C') toggleCycle();
