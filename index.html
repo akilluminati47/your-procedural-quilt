@@ -1392,28 +1392,27 @@ document.getElementById('btnFull').addEventListener('click', () => {
 });
 
 /* ---------------- tab title ticker ----------------
-   The title's total length always equals the title's own letter
-   count. Of that, WIN (5) characters are the "clear" window and the
-   rest are ░ blur — that blur count stays fixed the whole time. The
-   window spawns already fully-formed flush at one edge, slides
-   straight across to the far edge, the whole title goes back to full
-   blur, and the sweep reverses direction — forever. */
+   The title's letters stay put the whole time — only a 5-wide patch
+   of ░ blur moves across them, spawning flush at one edge and
+   sliding to the other. Between sweeps the whole title (exactly as
+   many characters as the title itself, no more) goes fully blurred
+   for a beat, then the sweep reverses direction — forever. */
 (function () {
   const BASE = document.title;          // exact title text — sets the total length
   const L    = BASE.length;
-  const WIN  = Math.min(5, L);          // width of the clear window
+  const WIN  = Math.min(5, L);          // width of the moving blur patch
   const HOLD = 4;                       // frames held fully blurred at each turnaround
   const STEP = 220;                     // ms per frame
 
-  const blank = '░'.repeat(L);
+  const blank = '░'.repeat(L);          // exactly L characters, nothing more
 
-  // window spawns flush at the left edge (pos 0) and slides to the right
-  // edge (pos L-WIN); blur count is fixed at L-WIN the entire sweep.
+  // patch spawns flush at the left edge (pos 0) and slides to the
+  // right edge (pos L-WIN); every other letter stays exactly as-is.
   const forward = [];
   for (let pos = 0; pos <= L - WIN; pos++) {
-    let s = '';
-    for (let i = 0; i < L; i++) s += (i >= pos && i < pos + WIN) ? BASE[i] : '░';
-    forward.push(s);
+    const chars = BASE.split('');
+    for (let i = pos; i < pos + WIN; i++) chars[i] = '░';
+    forward.push(chars.join(''));
   }
   const backward = forward.slice().reverse();   // same sweep, mirrored: right to left
 
