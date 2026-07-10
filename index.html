@@ -1392,35 +1392,30 @@ document.getElementById('btnFull').addEventListener('click', () => {
 });
 
 /* ---------------- tab title ticker ----------------
-   Blur is the majority state, but the title never goes fully blank —
-   that's what was ballooning into a long blur bar. Instead a window
-   of the title's true letters creeps in one character at a time from
-   the left edge, grows to 5 wide, slides across, then creeps back
-   down to a single character at the right edge — and right there,
-   with just one letter showing, it bounces and creeps the same way
-   back to the left edge. Forever, never fully blank. */
+   The splash page's lens, played out in the tab: the title starts fully
+   veiled at its own exact length, a clear window creeps in from the left
+   one letter at a time, widens to 5, pans across (hiding one behind as it
+   shows the next), then recedes letter by letter to full veil at the far
+   end — and the same sweep runs back right-to-left. Every frame keeps the
+   title's character count, and spaces stay spaces instead of joining the
+   veil, so the name's width never shifts more than the letters themselves. */
 (function () {
-  const BASE = document.title;          // exact title text — sets the total length
+  const BASE = document.title;               // exact title text — every frame keeps this length
   const L    = BASE.length;
-  const WIN  = Math.min(5, L);          // width of the revealed window at its widest
-  const STEP = 220;                     // ms per frame
+  const WIN  = Math.min(5, L);               // the lens at its widest
+  const STEP = 220;                          // ms per frame
+  const veil = ch => ch === ' ' ? ' ' : '░'; // blur letters only — word gaps hold the shape
 
-  // pos ranges past both ends of the string on purpose: that's what makes
-  // the window creep in from 1 letter up to WIN, then back down to 1.
-  const forward = [];
-  for (let pos = -(WIN - 1); pos <= L - 1; pos++) {
-    let s = '';
-    for (let i = 0; i < L; i++) s += (i >= pos && i < pos + WIN) ? BASE[i] : '░';
-    forward.push(s);
-  }
-  const backward = forward.slice().reverse();   // same creep, mirrored: right to left
-
-  const frames = [...forward, ...backward];     // no hold frames — bounces at 1 char, never blank
-
-  let f = 0;
+  // the lens ping-pongs across [LO, HI]; both endpoints sit fully off the
+  // string, so each end of a sweep renders exactly one fully-veiled frame
+  const LO = -WIN, HI = L;
+  let a = LO, dir = 1;
   setInterval(() => {
-    document.title = frames[f];
-    f = (f + 1) % frames.length;
+    let s = '';
+    for (let i = 0; i < L; i++) s += (i >= a && i < a + WIN) ? BASE[i] : veil(BASE[i]);
+    document.title = s;
+    if (a >= HI) dir = -1; else if (a <= LO) dir = 1;
+    a += dir;
   }, STEP);
 })();
 
