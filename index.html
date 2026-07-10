@@ -1404,7 +1404,12 @@ document.getElementById('btnFull').addEventListener('click', () => {
   const L    = BASE.length;
   const WIN  = Math.min(5, L);               // the lens at its widest
   const STEP = 220;                          // ms per frame
-  const veil = ch => ch === ' ' ? ' ' : '░'; // blur letters only — word gaps hold the shape
+  // blur letters only (word gaps hold the shape), ALTERNATING the two shade
+  // glyphs by position: a run of one glyph fuses into a single long bar with
+  // its own visual size, but ░▒░▒ keeps every cell's boundary visible — the
+  // veil reads as per-letter blur and its width stays steady. Both glyphs
+  // come from the same Block Elements set, so they share one advance width.
+  const veil = (ch, i) => ch === ' ' ? ' ' : (i % 2 ? '▒' : '░');
 
   // the lens ping-pongs across [LO, HI]; both endpoints sit fully off the
   // string, so each end of a sweep renders exactly one fully-veiled frame
@@ -1412,7 +1417,7 @@ document.getElementById('btnFull').addEventListener('click', () => {
   let a = LO, dir = 1;
   setInterval(() => {
     let s = '';
-    for (let i = 0; i < L; i++) s += (i >= a && i < a + WIN) ? BASE[i] : veil(BASE[i]);
+    for (let i = 0; i < L; i++) s += (i >= a && i < a + WIN) ? BASE[i] : veil(BASE[i], i);
     document.title = s;
     if (a >= HI) dir = -1; else if (a <= LO) dir = 1;
     a += dir;
