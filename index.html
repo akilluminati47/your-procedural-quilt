@@ -1392,34 +1392,30 @@ document.getElementById('btnFull').addEventListener('click', () => {
 });
 
 /* ---------------- tab title ticker ----------------
-   Blur is the majority state: the title is mostly ░ at all times,
-   with a 5-wide window of the title's true letters sliding across it
-   — spawning flush at one edge, sliding to the other. Between sweeps
-   the whole title rests at exactly its own letter count in ░ (never
-   longer), then the sweep reverses direction — forever. */
+   Blur is the majority state, but the title never goes fully blank —
+   that's what was ballooning into a long blur bar. Instead a window
+   of the title's true letters creeps in one character at a time from
+   the left edge, grows to 5 wide, slides across, then creeps back
+   down to a single character at the right edge — and right there,
+   with just one letter showing, it bounces and creeps the same way
+   back to the left edge. Forever, never fully blank. */
 (function () {
   const BASE = document.title;          // exact title text — sets the total length
   const L    = BASE.length;
-  const WIN  = Math.min(5, L);          // width of the revealed window
-  const HOLD = 4;                       // frames held fully blurred at each turnaround
+  const WIN  = Math.min(5, L);          // width of the revealed window at its widest
   const STEP = 220;                     // ms per frame
 
-  const blank = '░'.repeat(L);          // the rest state: exactly L characters, never more
-
-  // window spawns flush at the left edge (pos 0) and slides to the right
-  // edge (pos L-WIN); everything outside the window stays ░ the whole time.
+  // pos ranges past both ends of the string on purpose: that's what makes
+  // the window creep in from 1 letter up to WIN, then back down to 1.
   const forward = [];
-  for (let pos = 0; pos <= L - WIN; pos++) {
+  for (let pos = -(WIN - 1); pos <= L - 1; pos++) {
     let s = '';
     for (let i = 0; i < L; i++) s += (i >= pos && i < pos + WIN) ? BASE[i] : '░';
     forward.push(s);
   }
-  const backward = forward.slice().reverse();   // same sweep, mirrored: right to left
+  const backward = forward.slice().reverse();   // same creep, mirrored: right to left
 
-  const frames = [];
-  const hold = () => { for (let i = 0; i < HOLD; i++) frames.push(blank); };
-  hold(); frames.push(...forward);
-  hold(); frames.push(...backward);
+  const frames = [...forward, ...backward];     // no hold frames — bounces at 1 char, never blank
 
   let f = 0;
   setInterval(() => {
