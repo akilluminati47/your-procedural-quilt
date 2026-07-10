@@ -1391,6 +1391,42 @@ document.getElementById('btnFull').addEventListener('click', () => {
   document.fullscreenElement ? document.exitFullscreen() : document.documentElement.requestFullscreen();
 });
 
+/* ---------------- tab title ticker ----------------
+   The document title turns to a field of ░ blocks exactly as long as
+   the title itself, then one letter creeps into view at a time until
+   a 5-wide window is showing, that window slides across to the far
+   end, then shrinks back off one letter at a time to full blur again
+   — and the whole sweep reverses direction and repeats, forever. */
+(function () {
+  const BASE = document.title;          // exact title text — sets the blur field's length
+  const L    = BASE.length;
+  const WIN  = Math.min(5, L);          // width of the revealed window
+  const HOLD = 4;                       // frames held fully blurred at each turnaround
+  const STEP = 130;                     // ms per frame
+
+  const blank = '░'.repeat(L);
+
+  // one full creep-in / slide / creep-out sweep, left to right
+  const forward = [];
+  for (let pos = -WIN + 1; pos <= L - 1; pos++) {
+    let s = '';
+    for (let i = 0; i < L; i++) s += (i >= pos && i < pos + WIN) ? BASE[i] : '░';
+    forward.push(s);
+  }
+  const backward = forward.slice().reverse();   // same sweep, mirrored: right to left
+
+  const frames = [];
+  const hold = () => { for (let i = 0; i < HOLD; i++) frames.push(blank); };
+  hold(); frames.push(...forward);
+  hold(); frames.push(...backward);
+
+  let f = 0;
+  setInterval(() => {
+    document.title = frames[f];
+    f = (f + 1) % frames.length;
+  }, STEP);
+})();
+
 /* ---------------- boot ---------------- */
 syncMoodChrome();   // set the mood button to the saved (or default daymare) mood
 initSeed();
