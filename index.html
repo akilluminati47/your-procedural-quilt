@@ -1392,23 +1392,25 @@ document.getElementById('btnFull').addEventListener('click', () => {
 });
 
 /* ---------------- tab title ticker ----------------
-   The document title turns to a field of ░ blocks exactly as long as
-   the title itself, then one letter creeps into view at a time until
-   a 5-wide window is showing, that window slides across to the far
-   end, then shrinks back off one letter at a time to full blur again
-   — and the whole sweep reverses direction and repeats, forever. */
+   The title's total length always equals the title's own letter
+   count. Of that, WIN (5) characters are the "clear" window and the
+   rest are ░ blur — that blur count stays fixed the whole time. The
+   window spawns already fully-formed flush at one edge, slides
+   straight across to the far edge, the whole title goes back to full
+   blur, and the sweep reverses direction — forever. */
 (function () {
-  const BASE = document.title;          // exact title text — sets the blur field's length
+  const BASE = document.title;          // exact title text — sets the total length
   const L    = BASE.length;
-  const WIN  = Math.min(5, L);          // width of the revealed window
+  const WIN  = Math.min(5, L);          // width of the clear window
   const HOLD = 4;                       // frames held fully blurred at each turnaround
-  const STEP = 130;                     // ms per frame
+  const STEP = 220;                     // ms per frame
 
   const blank = '░'.repeat(L);
 
-  // one full creep-in / slide / creep-out sweep, left to right
+  // window spawns flush at the left edge (pos 0) and slides to the right
+  // edge (pos L-WIN); blur count is fixed at L-WIN the entire sweep.
   const forward = [];
-  for (let pos = -WIN + 1; pos <= L - 1; pos++) {
+  for (let pos = 0; pos <= L - WIN; pos++) {
     let s = '';
     for (let i = 0; i < L; i++) s += (i >= pos && i < pos + WIN) ? BASE[i] : '░';
     forward.push(s);
