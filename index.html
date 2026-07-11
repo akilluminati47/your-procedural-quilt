@@ -1396,7 +1396,7 @@ document.getElementById('btnFull').addEventListener('click', () => {
    veiled, a clear window creeps in from the left, widens to 10, pans
    across (hiding one letter behind as it shows the next), then recedes
    to full veil at the far end — and the same sweep runs back
-   right-to-left. The veil is drawn compressed: a ░▒ block glyph runs
+   right-to-left. The veil is drawn compressed: a ░ block glyph runs
    wider than an average letter, so a run of k hidden letters renders as
    ceil(k / SQUEEZE) glyphs, keeping the animated title about the width
    of the plain one. Spaces stay spaces, so the word shapes hold. */
@@ -1406,9 +1406,9 @@ document.getElementById('btnFull').addEventListener('click', () => {
   const WIN  = Math.min(10, L);              // the lens at its widest
   const STEP = 220;                          // ms per frame
   const SQUEEZE = 1.75;                      // hidden letters per veil glyph
-  // ALTERNATE the two shade glyphs: a run of one glyph fuses into a single
-  // long bar, but ░▒░▒ keeps every cell's boundary visible
-  const run  = k => { let s = ''; for (let i = 0; i < k; i++) s += i % 2 ? '▒' : '░'; return s; };
+  // one light-shade glyph throughout — the veil no longer marks per-letter
+  // cells, so a fused ░░░ bar is the look, not a problem
+  const run  = k => '░'.repeat(k);
   const veil = seg => seg.split(' ').map(w => run(Math.ceil(w.length / SQUEEZE))).join(' ');
 
   // the lens ping-pongs across [LO, HI]; both endpoints sit fully off the
