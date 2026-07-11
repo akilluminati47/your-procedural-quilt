@@ -1392,34 +1392,32 @@ document.getElementById('btnFull').addEventListener('click', () => {
 });
 
 /* ---------------- tab title ticker ----------------
-   The splash page's lens, played out in the tab: a clear window pans
-   across the title, widening to 10 letters mid-sweep and narrowing to 5
-   at either end — the veil holds between 6 and 11 cells, never swallowing
-   the whole name. The sweep ping-pongs left-to-right and back. Every
-   frame keeps the title's character count, and spaces stay spaces instead
-   of joining the veil, so the name's width never shifts more than the
-   letters themselves. */
+   The splash page's lens, played out in the tab: the title starts fully
+   veiled, a clear window creeps in from the left, widens to 10, pans
+   across (hiding one letter behind as it shows the next), then recedes
+   to full veil at the far end — and the same sweep runs back
+   right-to-left. The veil is drawn compressed: a ░▒ block glyph runs
+   wider than an average letter, so a run of k hidden letters renders as
+   ceil(k / SQUEEZE) glyphs, keeping the animated title about the width
+   of the plain one. Spaces stay spaces, so the word shapes hold. */
 (function () {
-  const BASE = document.title;               // exact title text — every frame keeps this length
+  const BASE = document.title;               // exact title text
   const L    = BASE.length;
   const WIN  = Math.min(10, L);              // the lens at its widest
-  const KEEP = Math.min(5, L);               // letters that always stay clear
   const STEP = 220;                          // ms per frame
-  // blur letters only (word gaps hold the shape), ALTERNATING the two shade
-  // glyphs by position: a run of one glyph fuses into a single long bar with
-  // its own visual size, but ░▒░▒ keeps every cell's boundary visible — the
-  // veil reads as per-letter blur and its width stays steady. Both glyphs
-  // come from the same Block Elements set, so they share one advance width.
-  const veil = (ch, i) => ch === ' ' ? ' ' : (i % 2 ? '▒' : '░');
+  const SQUEEZE = 1.75;                      // hidden letters per veil glyph
+  // ALTERNATE the two shade glyphs: a run of one glyph fuses into a single
+  // long bar, but ░▒░▒ keeps every cell's boundary visible
+  const run  = k => { let s = ''; for (let i = 0; i < k; i++) s += i % 2 ? '▒' : '░'; return s; };
+  const veil = seg => seg.split(' ').map(w => run(Math.ceil(w.length / SQUEEZE))).join(' ');
 
-  // the lens ping-pongs across [LO, HI]; both endpoints keep KEEP letters
-  // on the string, so the title never renders fully veiled
-  const LO = KEEP - WIN, HI = L - KEEP;
+  // the lens ping-pongs across [LO, HI]; both endpoints sit fully off the
+  // string, so each end of a sweep renders exactly one fully-veiled frame
+  const LO = -WIN, HI = L;
   let a = LO, dir = 1;
   setInterval(() => {
-    let s = '';
-    for (let i = 0; i < L; i++) s += (i >= a && i < a + WIN) ? BASE[i] : veil(BASE[i], i);
-    document.title = s;
+    const lo = Math.max(0, a), hi = Math.max(lo, Math.min(L, a + WIN));
+    document.title = veil(BASE.slice(0, lo)) + BASE.slice(lo, hi) + veil(BASE.slice(hi));
     if (a >= HI) dir = -1; else if (a <= LO) dir = 1;
     a += dir;
   }, STEP);
