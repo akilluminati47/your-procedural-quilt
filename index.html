@@ -61,6 +61,17 @@
     -webkit-mask-image: radial-gradient(circle var(--r) at var(--mx) var(--my), transparent 0 var(--r), #000 calc(var(--r) + 70px));
             mask-image: radial-gradient(circle var(--r) at var(--mx) var(--my), transparent 0 var(--r), #000 calc(var(--r) + 70px));
   }
+  /* framed on a gallery wall with no cursor over it, the lens SLEEPS: no
+     backdrop veil, no mask, no per-frame property writes (see lensTick) — a
+     live full-viewport backdrop-filter inside the hall's composited slab is
+     exactly the paint churn that tore the panel black while the splash sat
+     idle. The first real mousemove — the hall's view mode handing the
+     pointer in, or a direct visitor — wakes the full lens, blur ramping
+     from zero as designed. Standalone tabs never sleep. */
+  body.lens-asleep #enterBlur {
+    backdrop-filter: none; -webkit-backdrop-filter: none;
+    -webkit-mask-image: none; mask-image: none;
+  }
 
   #enter .ring {
     position: absolute; left: var(--mx); top: var(--my); z-index: 3;
@@ -1299,11 +1310,24 @@ let lensX = innerWidth / 2, lensY = innerHeight / 2;
 let mouseX = lensX, mouseY = lensY;
 let lensBlur = 0;
 
-addEventListener('mousemove', e => { mouseX = e.clientX; mouseY = e.clientY; });
+// framed (a Frutiger Gallery live wall) with no pointer over the page, the
+// lens sleeps — see the body.lens-asleep note in the styles. A cross-origin
+// top window throws on the identity check; that throw itself means framed.
+const FRAMED = (() => { try { return window.self !== window.top; } catch { return true; } })();
+let lensAwake = !FRAMED;
+if (FRAMED) document.body.classList.add('lens-asleep');
+function wakeLens() {
+  if (lensAwake) return;
+  lensAwake = true;
+  document.body.classList.remove('lens-asleep');
+}
+
+addEventListener('mousemove', e => { mouseX = e.clientX; mouseY = e.clientY; wakeLens(); });
 
 function lensTick() {
   if (!enterActive) return;
   requestAnimationFrame(lensTick);
+  if (!lensAwake) return;   // asleep on a wall: hold the splash byte-stable, no style churn
   lensX += (mouseX - lensX) * 0.12;
   lensY += (mouseY - lensY) * 0.12;
   const excited = Math.hypot(mouseX - lensX, mouseY - lensY) > LENS_R;
@@ -1324,6 +1348,7 @@ let pinchMidY = null;
 
 function touchPan(t) {
   mouseX = t.clientX; mouseY = t.clientY;              // start-screen lens
+  wakeLens();                                          // a finger counts as a pointer
   panEase = PAN_FOLLOW;
   targetPanX = (t.clientX / innerWidth  - 0.5) * 46 * DPR;
   targetPanY = (t.clientY / innerHeight - 0.5) * 46 * DPR;
