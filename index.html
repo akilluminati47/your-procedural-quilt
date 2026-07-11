@@ -1392,17 +1392,18 @@ document.getElementById('btnFull').addEventListener('click', () => {
 });
 
 /* ---------------- tab title ticker ----------------
-   The splash page's lens, played out in the tab: the title starts fully
-   veiled at its own exact length, a clear window creeps in from the left
-   one letter at a time, widens to 5, pans across (hiding one behind as it
-   shows the next), then recedes letter by letter to full veil at the far
-   end — and the same sweep runs back right-to-left. Every frame keeps the
-   title's character count, and spaces stay spaces instead of joining the
-   veil, so the name's width never shifts more than the letters themselves. */
+   The splash page's lens, played out in the tab: a clear window pans
+   across the title, widening to 10 letters mid-sweep and narrowing to 5
+   at either end — the veil holds between 6 and 11 cells, never swallowing
+   the whole name. The sweep ping-pongs left-to-right and back. Every
+   frame keeps the title's character count, and spaces stay spaces instead
+   of joining the veil, so the name's width never shifts more than the
+   letters themselves. */
 (function () {
   const BASE = document.title;               // exact title text — every frame keeps this length
   const L    = BASE.length;
-  const WIN  = Math.min(5, L);               // the lens at its widest
+  const WIN  = Math.min(10, L);              // the lens at its widest
+  const KEEP = Math.min(5, L);               // letters that always stay clear
   const STEP = 220;                          // ms per frame
   // blur letters only (word gaps hold the shape), ALTERNATING the two shade
   // glyphs by position: a run of one glyph fuses into a single long bar with
@@ -1411,9 +1412,9 @@ document.getElementById('btnFull').addEventListener('click', () => {
   // come from the same Block Elements set, so they share one advance width.
   const veil = (ch, i) => ch === ' ' ? ' ' : (i % 2 ? '▒' : '░');
 
-  // the lens ping-pongs across [LO, HI]; both endpoints sit fully off the
-  // string, so each end of a sweep renders exactly one fully-veiled frame
-  const LO = -WIN, HI = L;
+  // the lens ping-pongs across [LO, HI]; both endpoints keep KEEP letters
+  // on the string, so the title never renders fully veiled
+  const LO = KEEP - WIN, HI = L - KEEP;
   let a = LO, dir = 1;
   setInterval(() => {
     let s = '';
